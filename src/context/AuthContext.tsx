@@ -38,8 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (docSnap.exists()) {
             setProfile({ uid: user.uid, ...docSnap.data() } as UserProfile);
           } else {
-            const adminEmails = ['bruno@adsplay.com.br', 'admin@adsplay.com.br'];
-            const isDefaultAdmin = adminEmails.includes(user.email?.toLowerCase()?.trim() ?? '');
+            const isDefaultAdmin = user.email?.toLowerCase()?.trim() === 'bruno@adsplay.com.br';
             
             // 2. Try fetching the specific invite document (predictable ID)
             const inviteId = `invite_${user.email?.toLowerCase()?.trim()}`;
@@ -138,7 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const role = profile?.role || null;
-  const isSuperAdmin = role === 'SUPER_ADMIN' || ['bruno@adsplay.com.br', 'admin@adsplay.com.br'].includes(user?.email?.toLowerCase() ?? '');
+  const isSuperAdmin = role === 'SUPER_ADMIN' || user?.email === 'bruno@adsplay.com.br';
   const isAdmin = isSuperAdmin || role === 'ADMIN';
   const isContentManager = isAdmin || role === 'CONTENT_MANAGER';
 

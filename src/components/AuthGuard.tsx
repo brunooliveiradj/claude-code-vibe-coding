@@ -11,9 +11,16 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const ALLOWED_DOMAINS = ['adsplay.com.br', 'mootag.com.br', 'the365group.com.br'];
+
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    const domain = email.split('@')[1]?.toLowerCase();
+    if (!ALLOWED_DOMAINS.includes(domain)) {
+      setError('Acesso permitido apenas para emails @adsplay.com.br, @mootag.com.br ou @the365group.com.br.');
+      return;
+    }
     try {
       await loginWithEmail(email, password);
     } catch (err: any) {
