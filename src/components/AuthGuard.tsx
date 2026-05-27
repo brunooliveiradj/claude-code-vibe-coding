@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { LogIn, ShieldAlert, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading, login, loginWithEmail, logout, isLoggingIn } = useAuth();
+  const { user, profile, loading, loginWithEmail, logout, isLoggingIn } = useAuth();
   const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -101,23 +101,6 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
             </button>
           </form>
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-zinc-100"></div>
-            </div>
-            <div className="relative flex justify-center text-[10px] uppercase font-black tracking-widest">
-              <span className="bg-white px-4 text-zinc-400">Ou continue com</span>
-            </div>
-          </div>
-
-          <button 
-            onClick={login}
-            disabled={isLoggingIn}
-            className="w-full py-4 bg-white text-zinc-600 border border-zinc-200 rounded-2xl font-bold hover:bg-zinc-50 transition-all flex items-center justify-center gap-3 shadow-sm disabled:opacity-50"
-          >
-            <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
-            Google
-          </button>
         </div>
       </div>
     );
