@@ -18,14 +18,24 @@ import {
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
+const DEFAULT_CONFIG = {
+  apiKey: 'AIzaSyBWM07u6xnONI_ZdXbhoPBb-Nb81U5YcUI',
+  authDomain: 'ai-studio-applet-webapp-a4037.firebaseapp.com',
+  projectId: 'ai-studio-applet-webapp-a4037',
+  storageBucket: 'ai-studio-applet-webapp-a4037.firebasestorage.app',
+  messagingSenderId: '577049385323',
+  appId: '1:577049385323:web:0cd5216664e1a657a9142e',
+  firestoreDatabaseId: 'ai-studio-6747962b-4319-4fcd-b642-b54dbe551a9d',
+};
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN as string,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID as string,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET as string,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID as string,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID as string,
-  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID as string,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || DEFAULT_CONFIG.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || DEFAULT_CONFIG.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || DEFAULT_CONFIG.projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || DEFAULT_CONFIG.storageBucket,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || DEFAULT_CONFIG.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || DEFAULT_CONFIG.appId,
+  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || DEFAULT_CONFIG.firestoreDatabaseId,
 };
 
 // Initialize Firebase
