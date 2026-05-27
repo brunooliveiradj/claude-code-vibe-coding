@@ -1,0 +1,163 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: media
+    // Fields: title (string), type (string), payload (map), company (string), createdAt (timestamp)
+    //
+    // Collection: playlists
+    // Fields: name (string), items (list of maps), company (string), createdAt (timestamp)
+    //
+    // Collection: devices
+    // Fields: name (string), pair_code (string), is_paired (bool), last_ping (timestamp), current_playlist_id (string)
+    //
+    // Collection: schedule
+    // Fields: date (string), playlistId (string)
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function hasRole(roles) {
+      return isAuthenticated() && 
+        (
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && userDoc().data.role in roles) ||
+          (request.auth.token.email.lower() == "bruno@adsplay.com.br" && request.auth.token.email_verified == true && "SUPER_ADMIN" in roles)
+        );
+    }
+
+    function isSuperAdmin() {
+      return hasRole(['SUPER_ADMIN']);
+    }
+
+    function isAdmin() {
+      return hasRole(['SUPER_ADMIN', 'ADMIN']);
+    }
+
+    function isContentManager() {
+      return hasRole(['SUPER_ADMIN', 'ADMIN', 'CONTENT_MANAGER']);
+    }
+
+    function isValidMedia(data) {
+      return data.keys().hasAll(['title', 'type', 'payload']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.type in ['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'MONTHLY_GOAL', 'CAROUSEL', 'NEWS_CLIPPING', 'WEATHER', 'NORTH_STAR'] &&
+             data.payload is map &&
+             (!('company' in data) || data.company in ['Adsplay', 'Mootag', 'Geral']) &&
+             data.keys().hasOnly(['title', 'type', 'payload', 'company', 'createdAt', 'updatedAt']);
+    }
+
+    function isValidPlaylist(data) {
+      return data.keys().hasAll(['name', 'items']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.items is list &&
+             (!('logoUrl' in data) || data.logoUrl is string) &&
+             (!('company' in data) || data.company in ['Adsplay', 'Mootag', 'Geral']) &&
+             data.keys().hasOnly(['name', 'items', 'logoUrl', 'company', 'createdAt', 'updatedAt']);
+    }
+
+    function isValidDevice(data) {
+      return data.keys().hasAll(['name', 'pair_code', 'is_paired']) &&
+             data.name is string && data.name.size() < 100 &&
+             data.pair_code is string && data.pair_code.size() == 4 &&
+             data.is_paired is bool &&
+             data.keys().hasOnly(['name', 'pair_code', 'is_paired', 'last_ping', 'createdAt', 'updatedAt', 'current_playlist_id']);
+    }
+
+    function isValidSchedule(data) {
+      return data.keys().hasAll(['playlistId']) &&
+             data.playlistId is string &&
+             data.keys().hasOnly(['playlistId', 'date']);
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'role']) &&
+             data.email is string &&
+             data.role in ['SUPER_ADMIN', 'ADMIN', 'CONTENT_MANAGER'] &&
+             data.keys().hasOnly(['email', 'role', 'displayName', 'photoURL', 'createdAt', 'updatedAt']);
+    }
+
+    function isNewsUpdateOnly(newData, oldData) {
+      return newData.diff(oldData).affectedKeys().hasOnly(['payload', 'updatedAt']) &&
+             newData.payload.diff(oldData.payload).affectedKeys().hasOnly(['lastNews', 'lastNewsUpdate']) &&
+             newData.type == 'NEWS_CLIPPING';
+    }
+
+    function isWeatherUpdateOnly(newData, oldData) {
+      return newData.diff(oldData).affectedKeys().hasOnly(['payload', 'updatedAt']) &&
+             newData.payload.keys().hasAll(['city', 'currentTemp', 'condition', 'lastWeatherUpdate']) &&
+             oldData.type == 'WEATHER';
+    }
+
+    // Rules
+    match /media/{mediaId} {
+      allow read: if true; // Public for player
+      allow create: if isContentManager() && isValidMedia(request.resource.data);
+      allow update: if (isContentManager() && isValidMedia(request.resource.data)) || 
+                       isNewsUpdateOnly(request.resource.data, resource.data) ||
+                       isWeatherUpdateOnly(request.resource.data, resource.data);
+      allow delete: if isContentManager();
+    }
+
+    match /playlists/{playlistId} {
+      allow read: if true; // Public for player
+      allow create, update: if isContentManager() && isValidPlaylist(request.resource.data);
+      allow delete: if isContentManager();
+    }
+
+    match /schedule/{scheduleId} {
+      allow read: if true; // Public for player
+      allow create, update: if isContentManager() && isValidSchedule(request.resource.data);
+      allow delete: if isContentManager();
+    }
+
+    match /devices/{deviceId} {
+      allow read: if true; // Public for player to find itself
+      allow create: if true; // Allow new devices to register themselves
+      allow update: if (isAdmin() && isValidDevice(request.resource.data)) || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['last_ping'])); 
+      allow delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId || 
+        isSuperAdmin() || 
+        (resource != null && resource.data.email.lower() == request.auth.token.email.lower())
+      );
+      
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (
+        isSuperAdmin() || 
+        (request.auth.uid == userId && (
+          (request.auth.token.email.lower() == "bruno@adsplay.com.br") ||
+          exists(/databases/$(database)/documents/users/invite_ + request.auth.token.email.lower())
+        ))
+      );
+
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (
+        isSuperAdmin() || 
+        (request.auth.uid == userId && request.resource.data.role == resource.data.role)
+      );
+
+      allow delete: if isSuperAdmin() || (
+        isAuthenticated() && 
+        userId == "invite_" + request.auth.token.email.lower()
+      );
+    }
+
+    match /library/{libraryId} {
+      allow read: if isAuthenticated();
+      allow create: if isContentManager();
+      allow delete: if isContentManager() && resource.data.uploadedBy == request.auth.uid;
+    }
+  }
+}

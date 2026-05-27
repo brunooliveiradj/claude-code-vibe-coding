@@ -1,0 +1,120 @@
+{
+  "entities": {
+    "Media": {
+      "title": "Media",
+      "description": "Media content for the signage system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["IMAGE_HERO", "VIDEO_FILE", "YOUTUBE", "DASHBOARD", "INSTAGRAM"] },
+        "payload": { "type": "object" },
+        "company": { "type": "string", "enum": ["Adsplay", "Mootag", "Geral"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "type", "payload"]
+    },
+    "Playlist": {
+      "title": "Playlist",
+      "description": "A sequence of media items",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "media_id": { "type": "string" },
+              "duration": { "type": "integer" }
+            },
+            "required": ["media_id", "duration"]
+          }
+        },
+        "company": { "type": "string", "enum": ["Adsplay", "Mootag", "Geral"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "items"]
+    },
+    "Device": {
+      "title": "Device",
+      "description": "A TV or display device",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "pair_code": { "type": "string" },
+        "is_paired": { "type": "boolean" },
+        "last_ping": { "type": "string", "format": "date-time" },
+        "current_playlist_id": { "type": "string" }
+      },
+      "required": ["name", "pair_code", "is_paired"]
+    },
+    "Schedule": {
+      "title": "Schedule",
+      "description": "Daily playlist assignments",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date" },
+        "playlistId": { "type": "string" }
+      },
+      "required": ["date", "playlistId"]
+    },
+    "User": {
+      "title": "User",
+      "description": "System user with role-based access",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["SUPER_ADMIN", "ADMIN", "CONTENT_MANAGER"] },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role"]
+    },
+    "LibraryItem": {
+      "title": "Library Item",
+      "description": "An uploaded file in the media library",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "url": { "type": "string" },
+        "path": { "type": "string" },
+        "type": { "type": "string", "enum": ["image", "video"] },
+        "size": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "uploadedBy": { "type": "string" }
+      },
+      "required": ["name", "url", "path", "type", "size", "uploadedBy"]
+    }
+  },
+  "firestore": {
+    "/media": {
+      "schema": "Media",
+      "description": "Collection of media assets"
+    },
+    "/playlists": {
+      "schema": "Playlist",
+      "description": "Collection of playlists"
+    },
+    "/devices": {
+      "schema": "Device",
+      "description": "Collection of registered devices"
+    },
+    "/schedule": {
+      "schema": "Schedule",
+      "description": "Collection of scheduled playlists"
+    },
+    "/users": {
+      "schema": "User",
+      "description": "Collection of system users"
+    },
+    "/library": {
+      "schema": "LibraryItem",
+      "description": "Collection of uploaded library items"
+    }
+  }
+}

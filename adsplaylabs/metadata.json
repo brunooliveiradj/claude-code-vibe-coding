@@ -1,0 +1,5 @@
+{
+  "name": "Adsplay Labs - TV",
+  "description": "Corporate Digital Signage system with Admin Panel and TV Player management.",
+  "requestFramePermissions": ["screen-wake-lock"]
+}
