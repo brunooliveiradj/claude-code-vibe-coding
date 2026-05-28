@@ -1,44 +1,71 @@
-export type UserRole = 'SUPER_ADMIN' | 'ADMIN' | 'CONTENT_MANAGER';
-
-export interface UserProfile {
-  uid: string;
-  email: string;
-  role: UserRole;
-  displayName?: string;
-  photoURL?: string;
-  password?: string; // Added for internal tracking as requested
-  createdAt: any;
-  updatedAt?: any;
+export enum CampaignGoal {
+  AWARENESS = "Awareness",
+  ENGAGEMENT = "Engajamento",
+  VENDAS = "Vendas",
+  MISTO = "Misto"
 }
 
-export type Company = 'Adsplay' | 'Mootag' | 'Geral';
-
-export interface Media {
-  id: string;
-  title: string;
-  type: 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'WEATHER' | 'NORTH_STAR';
-  company: Company;
-  payload: any;
-  createdAt?: any;
+export enum MediaStrategy {
+  DISPLAY = "Display",
+  VIDEO = "Video"
 }
 
-export interface Playlist {
-  id: string;
-  name: string;
-  company: Company;
-  logoUrl?: string;
-  items: {
-    media_id: string;
-    duration: number;
-  }[];
-  createdAt?: any;
+export interface CampaignState {
+  objective: CampaignGoal | "";
+  advertiserName: string;
+  campaignName: string;
+  startDate: string;
+  endDate: string;
+  budget: number | "";
+
+  groupName: string;
+  groupDurationSame: boolean;
+  groupStartDate: string;
+  groupEndDate: string;
+  groupBudget: number | "";
+  cpcBidAutomatic: boolean;
+  cpcBid: number;
+  cpmBidAutomatic: boolean;
+  cpmBid: number;
+
+  strategy: MediaStrategy | "";
+  geoMode: "region" | "radius";
+  targetRegions: string[];
+  radiusAddress: string;
+  radiusKm: number;
+
+  genders: string[];
+  devices: string[];
+  environments: string[];
+
+  keywords: string[];
+  broadAudiences: string[];
+  segmentedAudiences: string[];
+  customAudienceRequested: boolean;
+  customAudienceText: string;
+
+  siteBlocklist: string[];
+  siteWhitelist: string[];
+
+  frequencyLimitEnabled: boolean;
+  frequencyLimitImpressions: number | "";
+  frequencyLimitPeriod: string;
+
+  lookalike: boolean;
+
+  creativesMode: "existing" | "new";
+  selectedCreatives: string[];
+
+  pixelMode: "select" | "create";
+  selectedPixelId: string;
+  newPixelName: string;
+  newPixelType: "conversion" | "retargeting";
 }
 
-export interface Device {
+export interface WizardMessage {
   id: string;
-  name: string;
-  pair_code: string;
-  is_paired: boolean;
-  last_ping?: any;
-  current_playlist_id?: string;
+  type: "ai-text" | "user-text" | "step-active" | "step-done";
+  text?: string;
+  step?: number;
+  summary?: string;
 }
