@@ -13,7 +13,8 @@ import {
   updateEmail,
   EmailAuthProvider,
   reauthenticateWithCredential,
-  signOut
+  signOut,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
@@ -53,14 +54,15 @@ export const googleProvider = new GoogleAuthProvider();
 
 export const signInWithGoogle = () => signInWithPopup(auth, googleProvider);
 
-export { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  updatePassword, 
-  updateEmail, 
-  EmailAuthProvider, 
+export {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updatePassword,
+  updateEmail,
+  EmailAuthProvider,
   reauthenticateWithCredential,
   signOut,
+  sendPasswordResetEmail,
   firebaseConfig // Export config for secondary app initialization
 };
 
