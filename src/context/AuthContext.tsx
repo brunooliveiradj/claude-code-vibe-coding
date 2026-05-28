@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User, signInWithEmailAndPassword as firebaseSignInWithEmailAndPassword } from 'firebase/auth';
 import { auth, db, signInWithGoogle, signOut } from '../firebase';
-import { doc, getDoc, setDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { UserProfile, UserRole } from '../types';
 
 interface AuthContextType {
@@ -36,7 +36,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           let docSnap = await getDoc(docRef);
           
           if (docSnap.exists()) {
-            setProfile({ uid: user.uid, ...docSnap.data() } as UserProfile);
+            const data = docSnap.data();
+            // Mark as active on first login
+            if (data.status === 'pending') {
+              await updateDoc(docRef, { status: 'active', updatedAt: serverTimestamp() }).catch(() => {});
+              data.status = 'active';
+            }
+            setProfile({ uid: user.uid, ...data } as UserProfile);
           } else {
             const isDefaultAdmin = user.email?.toLowerCase()?.trim() === 'bruno@adsplay.com.br';
             
