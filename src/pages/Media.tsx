@@ -215,25 +215,33 @@ export function Media() {
       const uploadTask = uploadBytesResumable(storageRef, fileToUpload);
 
       await new Promise<void>((resolve, reject) => {
-        uploadTask.on('state_changed', 
+        const timeout = setTimeout(() => {
+          uploadTask.cancel();
+          reject(new Error('Upload expirou. Verifique sua conexão ou as permissões do Firebase Storage.'));
+        }, 60000);
+
+        uploadTask.on('state_changed',
           (snapshot) => {
             const progress = snapshot.totalBytes > 0 ? (snapshot.bytesTransferred / snapshot.totalBytes) * 100 : 0;
             setUploadProgress(Math.round(progress));
           },
           (err: any) => {
-            console.error('Upload error:', err);
+            clearTimeout(timeout);
+            console.error('Upload error:', err.code, err.message);
             if (err.code === 'storage/unauthorized') {
-              reject(new Error('Sem permissão para salvar. Verifique se você é administrador.'));
+              reject(new Error('Sem permissão. Verifique as Storage Rules no Firebase Console.'));
+            } else if (err.code === 'storage/canceled') {
+              reject(new Error('Upload cancelado por timeout. Tente novamente.'));
             } else {
-              reject(err);
+              reject(new Error(`Erro no upload: ${err.code || err.message}`));
             }
           },
           async () => {
+            clearTimeout(timeout);
             try {
               const url = await getDownloadURL(uploadTask.snapshot.ref);
               const meta = await getMetadata(uploadTask.snapshot.ref);
-              
-              // Also save to library
+
               await addDoc(collection(db, 'library'), {
                 name: file.name,
                 url,
@@ -243,7 +251,7 @@ export function Media() {
                 createdAt: serverTimestamp(),
                 uploadedBy: auth.currentUser?.uid
               });
-              
+
               setPayload(prev => ({ ...prev, url }));
               resolve();
             } catch (err) {
@@ -296,26 +304,32 @@ export function Media() {
         const uploadTask = uploadBytesResumable(storageRef, file);
 
         await new Promise<void>((resolve, reject) => {
-          uploadTask.on('state_changed', 
+          const timeout = setTimeout(() => {
+            uploadTask.cancel();
+            reject(new Error(`Upload de "${file.name}" expirou. Verifique as Storage Rules no Firebase Console.`));
+          }, 60000);
+
+          uploadTask.on('state_changed',
             (snapshot) => {
               const fileProgress = snapshot.totalBytes > 0 ? (snapshot.bytesTransferred / snapshot.totalBytes) * 100 : 0;
               const overallProgress = ((i / files.length) * 100) + (fileProgress / files.length);
               setUploadProgress(Math.round(overallProgress));
             },
             (err: any) => {
-              console.error('Upload error:', err);
+              clearTimeout(timeout);
+              console.error('Upload error:', err.code, err.message);
               if (err.code === 'storage/unauthorized') {
-                reject(new Error(`Sem permissão para "${file.name}".`));
+                reject(new Error(`Sem permissão para "${file.name}". Verifique as Storage Rules no Firebase Console.`));
               } else {
-                reject(err);
+                reject(new Error(`Erro no upload de "${file.name}": ${err.code || err.message}`));
               }
             },
             async () => {
+              clearTimeout(timeout);
               try {
                 const url = await getDownloadURL(uploadTask.snapshot.ref);
                 const meta = await getMetadata(uploadTask.snapshot.ref);
-                
-                // Save to library
+
                 await addDoc(collection(db, 'library'), {
                   name: file.name,
                   url,
