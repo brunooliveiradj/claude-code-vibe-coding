@@ -96,11 +96,13 @@ export function Users() {
 
       setInviteSent(inviteEmail);
     } catch (err: any) {
+      console.error('[Invite error]', err?.code, err?.message, err);
       if (err.code === 'auth/email-already-in-use') {
         setError('Este e-mail já possui uma conta.');
+      } else if (err.code === 'permission-denied' || err?.message?.includes('PERMISSION_DENIED')) {
+        setError('Sem permissão para criar usuário. Verifique as regras do Firestore.');
       } else {
-        setError('Erro ao convidar usuário. Tente novamente.');
-        console.error(err);
+        setError(`Erro: ${err?.code || err?.message || 'desconhecido'}`);
       }
     } finally {
       if (secondaryApp) await deleteApp(secondaryApp);

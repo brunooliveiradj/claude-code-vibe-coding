@@ -84,7 +84,7 @@ service cloud.firestore {
       return data.keys().hasAll(['email', 'role']) &&
              data.email is string &&
              data.role in ['SUPER_ADMIN', 'ADMIN', 'CONTENT_MANAGER'] &&
-             data.keys().hasOnly(['email', 'role', 'displayName', 'photoURL', 'createdAt', 'updatedAt']);
+             data.keys().hasOnly(['email', 'role', 'displayName', 'photoURL', 'createdAt', 'updatedAt', 'status', 'password']);
     }
 
     function isNewsUpdateOnly(newData, oldData) {
@@ -130,28 +130,25 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isAuthenticated() && (
-        request.auth.uid == userId || 
-        isSuperAdmin() || 
+        request.auth.uid == userId ||
+        isAdmin() ||
         (resource != null && resource.data.email.lower() == request.auth.token.email.lower())
       );
-      
+
       allow create: if isAuthenticated() && isValidUser(request.resource.data) && (
-        isSuperAdmin() || 
+        isAdmin() ||
+        (request.auth.uid == userId && request.auth.token.email.lower() == "bruno@adsplay.com.br")
+      );
+
+      allow update: if isAuthenticated() && (
+        (isAdmin() && isValidUser(request.resource.data)) ||
         (request.auth.uid == userId && (
-          (request.auth.token.email.lower() == "bruno@adsplay.com.br") ||
-          exists(/databases/$(database)/documents/users/invite_ + request.auth.token.email.lower())
+          (isValidUser(request.resource.data) && request.resource.data.role == resource.data.role) ||
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
         ))
       );
 
-      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (
-        isSuperAdmin() || 
-        (request.auth.uid == userId && request.resource.data.role == resource.data.role)
-      );
-
-      allow delete: if isSuperAdmin() || (
-        isAuthenticated() && 
-        userId == "invite_" + request.auth.token.email.lower()
-      );
+      allow delete: if isAdmin();
     }
 
     match /library/{libraryId} {
