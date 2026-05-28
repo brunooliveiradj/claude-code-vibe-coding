@@ -77,30 +77,38 @@ export function Users() {
     setLoading(true);
     let secondaryApp;
     try {
-      // Create user in a secondary Firebase app to preserve current admin session
-      secondaryApp = initializeApp(firebaseConfig, `invite_${Date.now()}`);
-      const secondaryAuth = getAuth(secondaryApp);
-      const { user: newUser } = await createUserWithEmailAndPassword(secondaryAuth, inviteEmail, randomPassword());
-
-      await setDoc(doc(db, 'users', newUser.uid), {
-        email: inviteEmail.toLowerCase().trim(),
+      const emailKey = inviteEmail.toLowerCase().trim();
+      const profileData = {
+        email: emailKey,
         role: inviteRole,
-        displayName: inviteEmail.split('@')[0],
+        displayName: emailKey.split('@')[0],
         photoURL: '',
         status: 'pending',
         createdAt: serverTimestamp(),
-      });
+      };
 
-      // Send Firebase password reset email — user clicks link and sets own password
+      try {
+        // Try to create new Auth user via secondary app (preserves admin session)
+        secondaryApp = initializeApp(firebaseConfig, `invite_${Date.now()}`);
+        const secondaryAuth = getAuth(secondaryApp);
+        const { user: newUser } = await createUserWithEmailAndPassword(secondaryAuth, inviteEmail, randomPassword());
+        await setDoc(doc(db, 'users', newUser.uid), profileData);
+      } catch (authErr: any) {
+        if (authErr.code === 'auth/email-already-in-use') {
+          // Auth user exists but has no Firestore profile — write invite doc
+          // AuthContext will migrate it to UID-based doc on first login
+          await setDoc(doc(db, 'users', `invite_${emailKey}`), profileData);
+        } else {
+          throw authErr;
+        }
+      }
+
       await sendPasswordResetEmail(auth, inviteEmail);
-
       setInviteSent(inviteEmail);
     } catch (err: any) {
       console.error('[Invite error]', err?.code, err?.message, err);
-      if (err.code === 'auth/email-already-in-use') {
-        setError('Este e-mail já possui uma conta.');
-      } else if (err.code === 'permission-denied' || err?.message?.includes('PERMISSION_DENIED')) {
-        setError('Sem permissão para criar usuário. Verifique as regras do Firestore.');
+      if (err.code === 'permission-denied' || err?.message?.includes('PERMISSION_DENIED')) {
+        setError('Sem permissão. As Firestore Rules precisam ser publicadas no Firebase Console.');
       } else {
         setError(`Erro: ${err?.code || err?.message || 'desconhecido'}`);
       }
