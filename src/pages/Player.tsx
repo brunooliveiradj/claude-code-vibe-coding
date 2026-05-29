@@ -64,7 +64,7 @@ import {
 interface Media {
   id: string;
   title: string;
-  type: 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'NORTH_STAR' | 'WEATHER' | 'WEBSITE_EMBED';
+  type: 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'NORTH_STAR' | 'WEATHER' | 'WEBSITE_EMBED' | 'FINAL_SPRINT';
   payload: any;
 }
 
@@ -1972,8 +1972,223 @@ export function Player() {
               </div>
             )}
 
+            {currentMedia.type === 'FINAL_SPRINT' && (() => {
+              const target = Number(currentMedia.payload.target) || 1;
+              const current = Number(currentMedia.payload.current) || 0;
+              const remaining = Math.max(0, target - current);
+              const percentage = Math.min(100, Math.round((current / target) * 100));
+              const label = currentMedia.payload.label || 'vendas';
+              const month = currentMedia.payload.month || '';
+              const teamName = currentMedia.payload.teamName || '';
+              const isGoalHit = current >= target;
+
+              return (
+                <div className="w-full h-full bg-[#060606] flex flex-col items-center justify-center relative overflow-hidden">
+                  {/* Atmospheric glow */}
+                  <div className="absolute inset-0 pointer-events-none">
+                    <motion.div
+                      animate={{ scale: [1, 1.3, 1], opacity: isGoalHit ? [0.3, 0.5, 0.3] : [0.15, 0.3, 0.15] }}
+                      transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                      className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[100vw] h-[100vw] rounded-full blur-[200px] ${isGoalHit ? 'bg-emerald-700/30' : 'bg-violet-900/40'}`}
+                    />
+                    {!isGoalHit && [...Array(7)].map((_, i) => (
+                      <motion.div
+                        key={i}
+                        initial={{ y: '100vh', opacity: 0 }}
+                        animate={{ y: ['100vh', '60vh', '10vh', '-10vh'], opacity: [0, 1, 0.6, 0] }}
+                        transition={{ duration: 2.5 + i * 0.4, repeat: Infinity, delay: i * 0.6, ease: "easeOut" }}
+                        className="absolute text-3xl"
+                        style={{ left: `${10 + i * 12}%`, willChange: 'transform' }}
+                      >
+                        🔥
+                      </motion.div>
+                    ))}
+                  </div>
+
+                  {/* Header badge */}
+                  <motion.div
+                    initial={{ y: -40, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="absolute top-20 left-0 right-0 flex justify-center z-10"
+                  >
+                    <div className="flex items-center gap-4 px-10 py-4 bg-white/5 backdrop-blur-md rounded-full border border-white/10">
+                      <motion.span
+                        animate={{ rotate: isGoalHit ? [0, -20, 20, 0] : [-10, 10, -10] }}
+                        transition={{ duration: isGoalHit ? 0.6 : 1, repeat: Infinity }}
+                        className="text-3xl"
+                      >
+                        {isGoalHit ? '🏆' : '🦙'}
+                      </motion.span>
+                      <span className="text-sm font-black text-white/80 uppercase tracking-[0.5em]">
+                        Sprint Final{month ? ` — ${month}` : ''}{teamName ? ` · ${teamName}` : ''}
+                      </span>
+                      {!isGoalHit && (
+                        <motion.span
+                          animate={{ opacity: [1, 0.2, 1] }}
+                          transition={{ duration: 0.8, repeat: Infinity }}
+                          className="text-3xl"
+                        >
+                          ⚡
+                        </motion.span>
+                      )}
+                    </div>
+                  </motion.div>
+
+                  {/* Main content */}
+                  <div className="relative z-10 flex flex-col items-center w-full max-w-5xl px-20 gap-8">
+                    {isGoalHit ? (
+                      <motion.div
+                        initial={{ scale: 0.5, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ type: "spring", stiffness: 200 }}
+                        className="text-center space-y-6"
+                      >
+                        <motion.div
+                          animate={{ scale: [1, 1.04, 1] }}
+                          transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                          className="text-[clamp(5rem,16vw,14rem)] font-black leading-none tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-emerald-300 to-emerald-500"
+                          style={{ filter: 'drop-shadow(0 0 60px rgba(16,185,129,0.4))' }}
+                        >
+                          META<br />BATIDA!
+                        </motion.div>
+                        <p className="text-4xl font-black text-emerald-400 uppercase tracking-widest">
+                          A lhama chegou lá! 🦙🎉
+                        </p>
+                      </motion.div>
+                    ) : (
+                      <div className="w-full flex flex-col items-center gap-4">
+                        <motion.p
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="text-2xl font-black text-zinc-500 uppercase tracking-[0.4em]"
+                        >
+                          Falta para a meta{month && <span className="text-adsplay"> {month}</span>}
+                        </motion.p>
+
+                        <motion.div
+                          animate={{ scale: [1, 1.015, 1] }}
+                          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                          className="text-[clamp(6rem,20vw,20rem)] font-black text-white leading-none tracking-tighter"
+                          style={{ textShadow: '0 0 80px rgba(124,58,237,0.5)' }}
+                        >
+                          {remaining}
+                        </motion.div>
+
+                        <motion.p
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 0.5 }}
+                          className="text-3xl font-black text-zinc-400 uppercase tracking-[0.3em] -mt-2"
+                        >
+                          {label}
+                        </motion.p>
+                      </div>
+                    )}
+
+                    {/* Progress bar + llama */}
+                    <div className="w-full space-y-0">
+                      <div className="flex justify-between items-end px-2 mb-2">
+                        <p className="text-xs font-black text-zinc-700 uppercase tracking-widest">0</p>
+                        <motion.p
+                          animate={{ opacity: !isGoalHit ? [1, 0.4, 1] : 1 }}
+                          transition={{ duration: 1.5, repeat: !isGoalHit ? Infinity : 0 }}
+                          className={`text-base font-black uppercase tracking-widest ${isGoalHit ? 'text-emerald-400' : 'text-adsplay'}`}
+                        >
+                          {percentage}% atingido
+                        </motion.p>
+                        <p className="text-xs font-black text-zinc-700 uppercase tracking-widest">{target} {label}</p>
+                      </div>
+
+                      <div className="relative h-10 w-full bg-zinc-900 rounded-full border border-white/5 overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${percentage}%` }}
+                          transition={{ duration: 2.5, ease: "easeOut" }}
+                          className={`h-full rounded-full relative overflow-hidden ${isGoalHit ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' : 'bg-gradient-to-r from-adsplay via-violet-500 to-fuchsia-500'}`}
+                        >
+                          <motion.div
+                            animate={{ x: ['-100%', '200%'] }}
+                            transition={{ duration: 1.8, repeat: Infinity, ease: "linear", repeatDelay: 0.3 }}
+                            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent skew-x-12"
+                          />
+                        </motion.div>
+                      </div>
+
+                      <div className="relative" style={{ height: '72px' }}>
+                        <motion.div
+                          initial={{ left: '1%' }}
+                          animate={{ left: `${Math.max(1, Math.min(93, percentage - 2))}%` }}
+                          transition={{ duration: 2.5, ease: "easeOut" }}
+                          className="absolute top-1 transform -translate-x-1/2"
+                        >
+                          <motion.div
+                            animate={{
+                              y: isGoalHit ? [0, -16, 0] : [0, -10, 0],
+                              rotate: isGoalHit ? [-15, 15, -15] : [-6, 6, -6]
+                            }}
+                            transition={{ duration: isGoalHit ? 0.5 : 0.7, repeat: Infinity }}
+                          >
+                            <span
+                              className="text-6xl block select-none"
+                              style={{ filter: 'drop-shadow(0 0 20px rgba(168,85,247,0.9))' }}
+                            >
+                              🦙
+                            </span>
+                          </motion.div>
+                          {!isGoalHit && (
+                            <motion.span
+                              animate={{ opacity: [0.7, 0], x: [-5, -20] }}
+                              transition={{ duration: 0.4, repeat: Infinity }}
+                              className="absolute top-4 -left-8 text-xl pointer-events-none"
+                            >
+                              💨
+                            </motion.span>
+                          )}
+                        </motion.div>
+                        <div className="absolute right-0 top-0 text-4xl select-none">🏁</div>
+                      </div>
+                    </div>
+
+                    {/* Bottom stats */}
+                    <motion.div
+                      initial={{ y: 24, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      transition={{ delay: 0.6 }}
+                      className="flex items-center gap-10"
+                    >
+                      <div className="text-center">
+                        <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-1">Realizadas</p>
+                        <p className={`text-4xl font-black ${isGoalHit ? 'text-emerald-400' : 'text-white'}`}>{current}</p>
+                      </div>
+                      <div className="w-px h-10 bg-zinc-800" />
+                      <div className="text-center">
+                        <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-1">Meta</p>
+                        <p className="text-4xl font-black text-zinc-500">{target}</p>
+                      </div>
+                      {!isGoalHit && (
+                        <>
+                          <div className="w-px h-10 bg-zinc-800" />
+                          <div className="text-center">
+                            <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-1">Faltam</p>
+                            <motion.p
+                              animate={{ color: ['#ef4444', '#7C3AED', '#ef4444'] }}
+                              transition={{ duration: 2.5, repeat: Infinity }}
+                              className="text-4xl font-black"
+                            >
+                              {remaining}
+                            </motion.p>
+                          </div>
+                        </>
+                      )}
+                    </motion.div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Unknown Media Type Fallback */}
-            {!['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'CAROUSEL', 'NEWS_CLIPPING', 'MONTHLY_GOAL', 'WEATHER', 'NORTH_STAR'].includes(currentMedia.type) && (
+            {!['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'CAROUSEL', 'NEWS_CLIPPING', 'MONTHLY_GOAL', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT'].includes(currentMedia.type) && (
               <div className="w-full h-full flex flex-col items-center justify-center text-white bg-zinc-900">
                 <p className="text-2xl font-bold">Tipo de mídia desconhecido</p>
                 <p className="text-zinc-500">{currentMedia.type}</p>

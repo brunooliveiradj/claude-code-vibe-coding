@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Image as ImageIcon, Video, Youtube, Layout, Trash2, Edit2, Instagram, Upload, Loader2, BarChart3, AlertCircle, Layers, X as XIcon, Newspaper, CloudSun, Star, MapPin, TrendingUp, Globe, HardDrive, CheckCircle2 } from 'lucide-react';
+import { Plus, Image as ImageIcon, Video, Youtube, Layout, Trash2, Edit2, Instagram, Upload, Loader2, BarChart3, AlertCircle, Layers, X as XIcon, Newspaper, CloudSun, Star, MapPin, TrendingUp, Globe, HardDrive, CheckCircle2, Zap } from 'lucide-react';
 import { auth, db, storage, handleFirestoreError, OperationType } from '../firebase';
 import { ref, uploadBytesResumable, getDownloadURL, getMetadata } from 'firebase/storage';
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
@@ -8,7 +8,7 @@ import { Company } from '../types';
 import { GoogleGenAI } from "@google/genai";
 import imageCompression from 'browser-image-compression';
 
-type MediaType = 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'WEATHER' | 'NORTH_STAR' | 'WEBSITE_EMBED';
+type MediaType = 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'WEATHER' | 'NORTH_STAR' | 'WEBSITE_EMBED' | 'FINAL_SPRINT';
 
 interface Media {
   id: string;
@@ -477,6 +477,7 @@ export function Media() {
       case 'WEATHER': return <CloudSun size={20} />;
       case 'NORTH_STAR': return <Star size={20} />;
       case 'WEBSITE_EMBED': return <Globe size={20} />;
+      case 'FINAL_SPRINT': return <Zap size={20} />;
     }
   };
 
@@ -647,8 +648,8 @@ export function Media() {
               )}
               {item.type === 'WEBSITE_EMBED' && (
                 <div className="w-full h-full relative group">
-                  <img 
-                    src={item.payload.screenshotUrl} 
+                  <img
+                    src={item.payload.screenshotUrl}
                     className="w-full h-full object-cover"
                     alt={item.title}
                     referrerPolicy="no-referrer"
@@ -657,6 +658,37 @@ export function Media() {
                     <Globe size={32} className="text-adsplay mb-2" />
                     <p className="text-xs font-bold text-white truncate w-full">{item.payload.url}</p>
                     <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mt-1">Website Embed</p>
+                  </div>
+                </div>
+              )}
+              {item.type === 'FINAL_SPRINT' && (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-950 p-6 space-y-3 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-violet-900/20 blur-[60px] rounded-full" />
+                  <motion.span
+                    animate={{ y: [0, -6, 0], rotate: [-8, 8, -8] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                    className="text-4xl relative z-10"
+                    style={{ filter: 'drop-shadow(0 0 12px rgba(168,85,247,0.8))' }}
+                  >
+                    🦙
+                  </motion.span>
+                  <div className="text-center relative z-10">
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Sprint Final</p>
+                    <p className="text-2xl font-black text-white mt-1">
+                      {Math.max(0, (item.payload.target || 100) - (item.payload.current || 0))}
+                      <span className="text-xs font-bold text-zinc-500 ml-1">{item.payload.label || 'vendas'}</span>
+                    </p>
+                  </div>
+                  <div className="w-full relative z-10 space-y-1">
+                    <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-adsplay to-violet-400 rounded-full"
+                        style={{ width: `${Math.min(100, Math.round(((item.payload.current || 0) / (item.payload.target || 1)) * 100))}%` }}
+                      />
+                    </div>
+                    <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest text-center">
+                      {item.payload.current || 0} / {item.payload.target || 100}
+                    </p>
                   </div>
                 </div>
               )}
@@ -774,7 +806,7 @@ export function Media() {
 
                 <div className="p-8 pt-6 flex-1 overflow-y-auto custom-scrollbar space-y-8">
                   <div className="grid grid-cols-10 gap-2">
-                    {(['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'MONTHLY_GOAL', 'CAROUSEL', 'NEWS_CLIPPING', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED'] as MediaType[]).map((t) => (
+                    {(['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'MONTHLY_GOAL', 'CAROUSEL', 'NEWS_CLIPPING', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT'] as MediaType[]).map((t) => (
                       <button
                         key={t}
                         type="button"
@@ -808,6 +840,9 @@ export function Media() {
                           }
                           if (t === 'NORTH_STAR' && !payload.adsplay) {
                             setPayload({ ...payload, adsplay: 0, pixel: 0, trigger: 0, adsmax: 0 });
+                          }
+                          if (t === 'FINAL_SPRINT') {
+                            setPayload({ target: 100, current: 0, label: 'vendas', month: '', teamName: '' });
                           }
                         }}
                         className={`p-3 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${
@@ -1595,12 +1630,107 @@ export function Media() {
                       </div>
                     </div>
                   )}
-                    
+
+                  {type === 'FINAL_SPRINT' && (
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-3 p-4 bg-violet-50 rounded-2xl border border-violet-100">
+                        <span className="text-3xl">🦙</span>
+                        <div>
+                          <p className="text-xs font-black text-violet-700 uppercase tracking-widest">Sprint Final</p>
+                          <p className="text-[10px] text-violet-500 font-medium">Exibe o número que falta para bater a meta do mês. Vai dar gás no time!</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Meta (total)</label>
+                          <input
+                            required
+                            type="number"
+                            placeholder="Ex: 100"
+                            value={payload.target || ''}
+                            onChange={(e) => setPayload({ ...payload, target: parseInt(e.target.value) || 0 })}
+                            className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all font-bold"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Realizadas (atual)</label>
+                          <input
+                            required
+                            type="number"
+                            placeholder="Ex: 65"
+                            value={payload.current || ''}
+                            onChange={(e) => setPayload({ ...payload, current: parseInt(e.target.value) || 0 })}
+                            className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all font-bold"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Tipo da Métrica</label>
+                          <input
+                            type="text"
+                            placeholder="vendas, contratos, ativações..."
+                            value={payload.label || ''}
+                            onChange={(e) => setPayload({ ...payload, label: e.target.value })}
+                            className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Mês de Referência</label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Maio, Junho"
+                            value={payload.month || ''}
+                            onChange={(e) => setPayload({ ...payload, month: e.target.value })}
+                            className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Nome do Time (opcional)</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Time Comercial, Squad Alpha"
+                          value={payload.teamName || ''}
+                          onChange={(e) => setPayload({ ...payload, teamName: e.target.value })}
+                          className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
+                        />
+                      </div>
+
+                      {(payload.target > 0) && (
+                        <div className="bg-zinc-900 p-5 rounded-3xl space-y-3">
+                          <div className="flex justify-between items-center">
+                            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Preview</p>
+                            <p className="text-sm font-black text-adsplay">
+                              {Math.max(0, (payload.target || 100) - (payload.current || 0))} faltam
+                            </p>
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="h-3 bg-zinc-800 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-adsplay to-violet-400 rounded-full transition-all duration-500"
+                                style={{ width: `${Math.min(100, Math.round(((payload.current || 0) / (payload.target || 1)) * 100))}%` }}
+                              />
+                            </div>
+                            <div className="flex justify-between text-[9px] font-bold text-zinc-600 uppercase tracking-widest">
+                              <span>0</span>
+                              <span className="text-zinc-400">{Math.round(((payload.current || 0) / (payload.target || 1)) * 100)}% atingido</span>
+                              <span className="text-adsplay">{payload.target} {payload.label || 'vendas'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   </div>
                 </div>
-                
+
                 <div className="p-8 pt-4 border-t border-zinc-100 flex gap-3 shrink-0">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
                     className="flex-1 px-4 py-3 rounded-2xl font-bold text-zinc-500 hover:bg-zinc-100 transition-colors"
