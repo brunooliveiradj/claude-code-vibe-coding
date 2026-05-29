@@ -672,24 +672,31 @@ export function Media() {
                   >
                     🦙
                   </motion.span>
-                  <div className="text-center relative z-10">
-                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Sprint Final</p>
-                    <p className="text-2xl font-black text-white mt-1">
-                      {Math.max(0, (item.payload.target || 100) - (item.payload.current || 0))}
-                      <span className="text-xs font-bold text-zinc-500 ml-1">{item.payload.label || 'vendas'}</span>
-                    </p>
-                  </div>
-                  <div className="w-full relative z-10 space-y-1">
-                    <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-adsplay to-violet-400 rounded-full"
-                        style={{ width: `${Math.min(100, Math.round(((item.payload.current || 0) / (item.payload.target || 1)) * 100))}%` }}
-                      />
-                    </div>
-                    <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest text-center">
-                      {item.payload.current || 0} / {item.payload.target || 100}
-                    </p>
-                  </div>
+                  {(() => {
+                    const fmt = (n: number) => `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                    const remaining = Math.max(0, (item.payload.target || 100) - (item.payload.current || 0));
+                    const pct = Math.min(100, Math.round(((item.payload.current || 0) / (item.payload.target || 1)) * 100));
+                    return (
+                      <>
+                        <div className="text-center relative z-10">
+                          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Sprint Final</p>
+                          <p className="text-lg font-black text-white mt-1 leading-tight">{fmt(remaining)}</p>
+                          <p className="text-[9px] font-bold text-zinc-500">{item.payload.label || 'vendas'} faltam</p>
+                        </div>
+                        <div className="w-full relative z-10 space-y-1">
+                          <div className="w-full h-2 bg-zinc-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-adsplay to-violet-400 rounded-full"
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <p className="text-[8px] font-black text-zinc-600 uppercase tracking-widest text-center">
+                            {fmt(item.payload.current || 0)} / {fmt(item.payload.target || 0)}
+                          </p>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               )}
               <div className="absolute top-3 left-3 bg-black/50 backdrop-blur-md text-white p-2 rounded-lg">
@@ -1702,25 +1709,32 @@ export function Media() {
 
                       {(payload.target > 0) && (
                         <div className="bg-zinc-900 p-5 rounded-3xl space-y-3">
-                          <div className="flex justify-between items-center">
-                            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Preview</p>
-                            <p className="text-sm font-black text-adsplay">
-                              {Math.max(0, (payload.target || 100) - (payload.current || 0))} faltam
-                            </p>
-                          </div>
-                          <div className="space-y-1.5">
-                            <div className="h-3 bg-zinc-800 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-gradient-to-r from-adsplay to-violet-400 rounded-full transition-all duration-500"
-                                style={{ width: `${Math.min(100, Math.round(((payload.current || 0) / (payload.target || 1)) * 100))}%` }}
-                              />
-                            </div>
-                            <div className="flex justify-between text-[9px] font-bold text-zinc-600 uppercase tracking-widest">
-                              <span>0</span>
-                              <span className="text-zinc-400">{Math.round(((payload.current || 0) / (payload.target || 1)) * 100)}% atingido</span>
-                              <span className="text-adsplay">{payload.target} {payload.label || 'vendas'}</span>
-                            </div>
-                          </div>
+                          {(() => {
+                            const fmt = (n: number) => `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                            const remaining = Math.max(0, (payload.target || 100) - (payload.current || 0));
+                            const pct = Math.round(((payload.current || 0) / (payload.target || 1)) * 100);
+                            return (
+                              <>
+                                <div className="flex justify-between items-center">
+                                  <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Preview</p>
+                                  <p className="text-sm font-black text-adsplay">{fmt(remaining)} faltam</p>
+                                </div>
+                                <div className="space-y-1.5">
+                                  <div className="h-3 bg-zinc-800 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-gradient-to-r from-adsplay to-violet-400 rounded-full transition-all duration-500"
+                                      style={{ width: `${Math.min(100, pct)}%` }}
+                                    />
+                                  </div>
+                                  <div className="flex justify-between text-[9px] font-bold text-zinc-600 uppercase tracking-widest">
+                                    <span>R$ 0,00</span>
+                                    <span className="text-zinc-400">{pct}% atingido</span>
+                                    <span className="text-adsplay">{fmt(payload.target || 0)} {payload.label || 'vendas'}</span>
+                                  </div>
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>

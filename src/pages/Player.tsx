@@ -1981,6 +1981,7 @@ export function Player() {
               const month = currentMedia.payload.month || '';
               const teamName = currentMedia.payload.teamName || '';
               const isGoalHit = current >= target;
+              const fmtBR = (n: number) => `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
               return (
                 <div className="w-full h-full bg-[#060606] flex flex-col items-center justify-center relative overflow-hidden">
@@ -2069,10 +2070,10 @@ export function Player() {
                         <motion.div
                           animate={{ scale: [1, 1.015, 1] }}
                           transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                          className="text-[clamp(6rem,20vw,20rem)] font-black text-white leading-none tracking-tighter"
+                          className="text-[clamp(3rem,12vw,12rem)] font-black text-white leading-none tracking-tighter"
                           style={{ textShadow: '0 0 80px rgba(124,58,237,0.5)' }}
                         >
-                          {remaining}
+                          {fmtBR(remaining)}
                         </motion.div>
 
                         <motion.p
@@ -2159,12 +2160,12 @@ export function Player() {
                     >
                       <div className="text-center">
                         <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-1">Realizadas</p>
-                        <p className={`text-4xl font-black ${isGoalHit ? 'text-emerald-400' : 'text-white'}`}>{current}</p>
+                        <p className={`text-2xl font-black ${isGoalHit ? 'text-emerald-400' : 'text-white'}`}>{fmtBR(current)}</p>
                       </div>
                       <div className="w-px h-10 bg-zinc-800" />
                       <div className="text-center">
                         <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-1">Meta</p>
-                        <p className="text-4xl font-black text-zinc-500">{target}</p>
+                        <p className="text-2xl font-black text-zinc-500">{fmtBR(target)}</p>
                       </div>
                       {!isGoalHit && (
                         <>
@@ -2174,9 +2175,9 @@ export function Player() {
                             <motion.p
                               animate={{ color: ['#ef4444', '#7C3AED', '#ef4444'] }}
                               transition={{ duration: 2.5, repeat: Infinity }}
-                              className="text-4xl font-black"
+                              className="text-2xl font-black"
                             >
-                              {remaining}
+                              {fmtBR(remaining)}
                             </motion.p>
                           </div>
                         </>
