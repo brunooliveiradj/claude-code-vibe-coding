@@ -71,6 +71,11 @@ export function Playlists() {
     fetchData();
   }, []);
 
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingPlaylist(null);
+  };
+
   const handleCreate = () => {
     setEditingPlaylist({ id: '', name: 'Nova Playlist', company: 'Geral', logoUrl: '', items: [] });
     setIsModalOpen(true);
@@ -117,7 +122,7 @@ export function Playlists() {
           createdAt: serverTimestamp()
         }));
       }
-      setIsModalOpen(false);
+      closeModal();
       fetchData();
     } catch (error) {
       handleFirestoreError(error, editingPlaylist.id ? OperationType.UPDATE : OperationType.CREATE, 'playlists');
@@ -352,7 +357,7 @@ export function Playlists() {
                         ))}
                       </div>
                     </div>
-                    <button onClick={() => setIsModalOpen(false)} className="text-zinc-400 hover:text-zinc-900">
+                    <button onClick={closeModal} className="text-zinc-400 hover:text-zinc-900">
                       <X size={24} />
                     </button>
                   </div>
@@ -385,8 +390,7 @@ export function Playlists() {
                     editingPlaylist.items.map((item, idx) => {
                       const media = mediaList.find(m => m.id === item.media_id);
                       return (
-                        <motion.div 
-                          layout
+                        <div
                           key={item.id || `item-${idx}`}
                           className="flex items-center gap-4 bg-zinc-50 p-4 rounded-2xl border border-zinc-100 group"
                         >
@@ -418,13 +422,13 @@ export function Playlists() {
                             />
                             <span className="text-xs font-bold text-zinc-400">s</span>
                           </div>
-                          <button 
+                          <button
                             onClick={() => removeItem(idx)}
                             className="p-2 text-zinc-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
                           >
                             <Trash2 size={18} />
                           </button>
-                        </motion.div>
+                        </div>
                       );
                     })
                   )}
