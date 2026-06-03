@@ -957,29 +957,57 @@ export function Player() {
     if (!isPaired && deviceId) return;
 
     const today = new Date().toISOString().split('T')[0];
-    
+    let playlistUnsub: (() => void) | null = null;
+    let lastPlaylistId: string | null = null;
+
     // Listen to schedule for today
-    const unsubscribe = onSnapshot(doc(db, 'schedule', today), async (docSnap) => {
+    const scheduleUnsub = onSnapshot(doc(db, 'schedule', today), (docSnap) => {
+      // Cancel the previous playlist subscription whenever the schedule changes
+      if (playlistUnsub) {
+        playlistUnsub();
+        playlistUnsub = null;
+      }
+
       if (docSnap.exists()) {
         const playlistId = docSnap.data().playlistId;
         if (playlistId) {
-          const plSnap = await getDoc(doc(db, 'playlists', playlistId));
-          if (plSnap.exists()) {
-            setPlaylist(Object.assign({ id: plSnap.id }, plSnap.data()) as Playlist);
-            setCurrentIndex(0);
-            setStatus('PLAYING');
-            return;
-          }
+          // Subscribe to the playlist document so content changes propagate in real time
+          playlistUnsub = onSnapshot(doc(db, 'playlists', playlistId), (plSnap) => {
+            if (plSnap.exists()) {
+              const newPlaylist = Object.assign({ id: plSnap.id }, plSnap.data()) as Playlist;
+              const isNewPlaylist = lastPlaylistId !== newPlaylist.id;
+              lastPlaylistId = newPlaylist.id;
+              if (isNewPlaylist) {
+                setCurrentIndex(0);
+              } else {
+                // Same playlist, items changed: keep position but clamp if needed
+                setCurrentIndex(prev => Math.min(prev, Math.max(0, newPlaylist.items.length - 1)));
+              }
+              setPlaylist(newPlaylist);
+              setStatus('PLAYING');
+            } else {
+              setPlaylist(null);
+              setStatus('IDLE');
+            }
+          }, (err) => {
+            handleFirestoreError(err, OperationType.GET, `playlists/${playlistId}`);
+          });
+          return;
         }
       }
+
       // No schedule or playlist found
+      lastPlaylistId = null;
       setPlaylist(null);
       setStatus('IDLE');
     }, (err) => {
       handleFirestoreError(err, OperationType.GET, `schedule/${today}`);
     });
 
-    return () => unsubscribe();
+    return () => {
+      scheduleUnsub();
+      if (playlistUnsub) playlistUnsub();
+    };
   }, [isPaired]);
 
   // 5. Playback Loop
