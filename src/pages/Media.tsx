@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Image as ImageIcon, Video, Youtube, Layout, Trash2, Edit2, Instagram, Upload, Loader2, BarChart3, AlertCircle, Layers, X as XIcon, Newspaper, CloudSun, Star, MapPin, TrendingUp, Globe, HardDrive, CheckCircle2, Zap } from 'lucide-react';
+import { Plus, Image as ImageIcon, Video, Youtube, Layout, Trash2, Edit2, Instagram, Upload, Loader2, BarChart3, AlertCircle, Layers, X as XIcon, Newspaper, CloudSun, Star, MapPin, TrendingUp, Globe, HardDrive, CheckCircle2, Zap, Trophy } from 'lucide-react';
 import { auth, db, storage, handleFirestoreError, OperationType } from '../firebase';
 import { ref, uploadBytesResumable, getDownloadURL, getMetadata } from 'firebase/storage';
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
@@ -8,7 +8,7 @@ import { Company } from '../types';
 import { GoogleGenAI } from "@google/genai";
 import imageCompression from 'browser-image-compression';
 
-type MediaType = 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'WEATHER' | 'NORTH_STAR' | 'WEBSITE_EMBED' | 'FINAL_SPRINT';
+type MediaType = 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'WEATHER' | 'NORTH_STAR' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES';
 
 interface Media {
   id: string;
@@ -478,6 +478,7 @@ export function Media() {
       case 'NORTH_STAR': return <Star size={20} />;
       case 'WEBSITE_EMBED': return <Globe size={20} />;
       case 'FINAL_SPRINT': return <Zap size={20} />;
+      case 'SMART_SALES': return <Trophy size={20} />;
     }
   };
 
@@ -699,6 +700,19 @@ export function Media() {
                   })()}
                 </div>
               )}
+              {item.type === 'SMART_SALES' && (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-950 p-6 space-y-2 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-emerald-900/20 blur-[60px] rounded-full" />
+                  <Trophy size={36} className="text-emerald-400 relative z-10" style={{ filter: 'drop-shadow(0 0 12px rgba(16,185,129,0.7))' }} />
+                  <div className="text-center relative z-10">
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Smart Media</p>
+                    <p className="text-base font-black text-white mt-0.5">Vendas em tempo real</p>
+                    <p className="text-[9px] font-bold text-zinc-500 mt-1">
+                      {(item.payload.scope || 'latest') === 'month' ? 'Mês atual' : 'Últimas 5'} · entradadecampanha@
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="absolute top-3 left-3 bg-black/50 backdrop-blur-md text-white p-2 rounded-lg">
                 {getIcon(item.type)}
               </div>
@@ -813,7 +827,7 @@ export function Media() {
 
                 <div className="p-8 pt-6 flex-1 overflow-y-auto custom-scrollbar space-y-8">
                   <div className="grid grid-cols-10 gap-2">
-                    {(['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'MONTHLY_GOAL', 'CAROUSEL', 'NEWS_CLIPPING', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT'] as MediaType[]).map((t) => (
+                    {(['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'MONTHLY_GOAL', 'CAROUSEL', 'NEWS_CLIPPING', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT', 'SMART_SALES'] as MediaType[]).map((t) => (
                       <button
                         key={t}
                         type="button"
@@ -850,6 +864,9 @@ export function Media() {
                           }
                           if (t === 'FINAL_SPRINT') {
                             setPayload({ target: 100, current: 0, label: 'vendas', month: '', teamName: '' });
+                          }
+                          if (t === 'SMART_SALES') {
+                            setPayload({ valueDisplay: 'full', scope: 'latest' });
                           }
                         }}
                         className={`p-3 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${
@@ -1737,6 +1754,83 @@ export function Media() {
                           })()}
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {type === 'SMART_SALES' && (
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                        <Trophy size={28} className="text-emerald-600 shrink-0" />
+                        <div>
+                          <p className="text-xs font-black text-emerald-700 uppercase tracking-widest">Smart Media · Vendas</p>
+                          <p className="text-[10px] text-emerald-600 font-medium">
+                            Conteúdo automático. Cada venda que chega em <span className="font-bold">entradadecampanha@adsplay.com.br</span> vira um card na TV em tempo real. Não é preciso cadastrar nada aqui — só configurar a exibição.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Exibição do valor (INVESTIMENTO)</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {([
+                            { v: 'full', label: 'Valor cheio', hint: 'R$ 80.000,00' },
+                            { v: 'abbreviated', label: 'Abreviado', hint: 'R$ 80 mil' },
+                            { v: 'hidden', label: 'Ocultar', hint: 'sem cifras' },
+                          ] as const).map((opt) => (
+                            <button
+                              key={opt.v}
+                              type="button"
+                              onClick={() => setPayload({ ...payload, valueDisplay: opt.v })}
+                              className={`p-3 rounded-2xl border-2 transition-all text-center ${
+                                (payload.valueDisplay || 'full') === opt.v
+                                  ? 'border-zinc-900 bg-zinc-900 text-white'
+                                  : 'border-zinc-100 text-zinc-500 hover:border-zinc-200'
+                              }`}
+                            >
+                              <p className="text-xs font-black uppercase tracking-widest">{opt.label}</p>
+                              <p className={`text-[9px] font-bold mt-0.5 ${(payload.valueDisplay || 'full') === opt.v ? 'text-zinc-400' : 'text-zinc-400'}`}>{opt.hint}</p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Quais vendas exibir</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {([
+                            { v: 'latest', label: 'Últimas 5', hint: 'sempre, qualquer data' },
+                            { v: 'month', label: 'Mês atual', hint: 'zera a cada mês' },
+                          ] as const).map((opt) => (
+                            <button
+                              key={opt.v}
+                              type="button"
+                              onClick={() => setPayload({ ...payload, scope: opt.v })}
+                              className={`p-3 rounded-2xl border-2 transition-all text-center ${
+                                (payload.scope || 'latest') === opt.v
+                                  ? 'border-zinc-900 bg-zinc-900 text-white'
+                                  : 'border-zinc-100 text-zinc-500 hover:border-zinc-200'
+                              }`}
+                            >
+                              <p className="text-xs font-black uppercase tracking-widest">{opt.label}</p>
+                              <p className="text-[9px] font-bold text-zinc-400 mt-0.5">{opt.hint}</p>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
+                        <div>
+                          <p className="text-xs font-black text-zinc-700 uppercase tracking-widest">Comemorar venda nova</p>
+                          <p className="text-[10px] text-zinc-400 font-medium">Animação breve quando uma venda entra na tela.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPayload({ ...payload, celebrate: payload.celebrate === false ? true : false })}
+                          className={`w-12 h-7 rounded-full transition-all relative ${payload.celebrate === false ? 'bg-zinc-300' : 'bg-emerald-500'}`}
+                        >
+                          <span className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-all ${payload.celebrate === false ? 'left-1' : 'left-6'}`} />
+                        </button>
+                      </div>
                     </div>
                   )}
 

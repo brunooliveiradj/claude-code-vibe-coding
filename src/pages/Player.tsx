@@ -49,23 +49,39 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { GoogleGenAI } from "@google/genai";
-import { 
-  collection, 
-  doc, 
-  onSnapshot, 
-  updateDoc, 
-  serverTimestamp, 
-  query, 
-  where, 
+import {
+  collection,
+  doc,
+  onSnapshot,
+  updateDoc,
+  serverTimestamp,
+  query,
+  where,
   getDocs,
-  getDoc
+  getDoc,
+  orderBy,
+  limit
 } from 'firebase/firestore';
 
 interface Media {
   id: string;
   title: string;
-  type: 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'NORTH_STAR' | 'WEATHER' | 'WEBSITE_EMBED' | 'FINAL_SPRINT';
+  type: 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'NORTH_STAR' | 'WEATHER' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES';
   payload: any;
+}
+
+interface Sale {
+  id: string;
+  squad?: string;
+  status?: string;
+  pi?: string;
+  investimento?: string;
+  investimentoValor?: number;
+  periodo?: string;
+  sdr?: string;
+  executivo?: string;
+  cs?: string;
+  soldAt?: number;
 }
 
 interface PlaylistItem {
@@ -975,6 +991,9 @@ export function Player() {
   // 6. Media Resolver (Real-time media fetch)
   const [currentMedia, setCurrentMedia] = useState<Media | null>(null);
   const [carouselIndex, setCarouselIndex] = useState(0);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [newSaleId, setNewSaleId] = useState<string | null>(null);
+  const knownSaleIdsRef = useRef<Set<string> | null>(null);
 
   useEffect(() => {
     if (currentMedia?.type === 'NEWS_CLIPPING') {
@@ -985,6 +1004,48 @@ export function Player() {
       setNewsItems([]);
     }
   }, [currentMedia?.id]);
+
+  // Smart Media: subscribe to the `sales` collection in real time (last 5)
+  useEffect(() => {
+    if (currentMedia?.type !== 'SMART_SALES') {
+      setSales([]);
+      knownSaleIdsRef.current = null;
+      return;
+    }
+
+    const scope = currentMedia.payload?.scope || 'latest';
+    const q = query(collection(db, 'sales'), orderBy('soldAt', 'desc'), limit(5));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Sale));
+
+      if (scope === 'month') {
+        const now = new Date();
+        docs = docs.filter(s => {
+          if (!s.soldAt) return false;
+          const d = new Date(s.soldAt);
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        });
+      }
+
+      // Detect a brand-new top sale for the celebration (skip the first load)
+      const topId = docs[0]?.id;
+      if (knownSaleIdsRef.current === null) {
+        knownSaleIdsRef.current = new Set(docs.map(s => s.id));
+      } else if (topId && !knownSaleIdsRef.current.has(topId)) {
+        knownSaleIdsRef.current = new Set(docs.map(s => s.id));
+        if (currentMedia.payload?.celebrate !== false) {
+          setNewSaleId(topId);
+          setTimeout(() => setNewSaleId(prev => (prev === topId ? null : prev)), 6000);
+        }
+      }
+
+      setSales(docs);
+    }, (err) => {
+      console.error('Error subscribing to sales:', err);
+    });
+
+    return () => unsubscribe();
+  }, [currentMedia?.id, currentMedia?.type, currentMedia?.payload?.scope]);
 
   useEffect(() => {
     if (currentMedia?.type === 'CAROUSEL' && currentMedia.payload.images?.length > 0) {
@@ -2188,8 +2249,126 @@ export function Player() {
               );
             })()}
 
+            {currentMedia.type === 'SMART_SALES' && (() => {
+              const valueDisplay = currentMedia.payload?.valueDisplay || 'full';
+              const fmtFull = (n: number) => `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+              const fmtAbbrev = (n: number) => {
+                if (n >= 1_000_000) return `R$ ${(n / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`;
+                if (n >= 1_000) return `R$ ${Math.round(n / 1_000).toLocaleString('pt-BR')} mil`;
+                return fmtFull(n);
+              };
+              const showValue = (s: Sale) => {
+                if (valueDisplay === 'hidden') return null;
+                const n = Number(s.investimentoValor) || 0;
+                if (!n && s.investimento) return s.investimento;
+                return valueDisplay === 'abbreviated' ? fmtAbbrev(n) : fmtFull(n);
+              };
+              const top = sales[0];
+              const rest = sales.slice(1, 5);
+
+              return (
+                <div className="w-full h-full bg-[#060606] flex flex-col relative overflow-hidden p-12 gap-8">
+                  {/* Atmospheric glow */}
+                  <div className="absolute inset-0 pointer-events-none">
+                    <motion.div
+                      animate={{ opacity: [0.15, 0.3, 0.15] }}
+                      transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+                      className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80vw] h-[80vw] rounded-full blur-[200px] bg-emerald-700/30"
+                    />
+                  </div>
+
+                  {/* New-sale celebration (brief, lightweight ≤6 elements) */}
+                  {newSaleId && newSaleId === top?.id && (
+                    <div className="absolute inset-0 pointer-events-none z-30">
+                      {[...Array(6)].map((_, i) => (
+                        <motion.div
+                          key={i}
+                          initial={{ y: '110vh', opacity: 0 }}
+                          animate={{ y: '-10vh', opacity: [0, 1, 0] }}
+                          transition={{ duration: 2.2, delay: i * 0.18, ease: 'easeOut' }}
+                          className="absolute text-5xl"
+                          style={{ left: `${12 + i * 14}%`, willChange: 'transform' }}
+                        >
+                          🎉
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Header */}
+                  <div className="relative z-10 flex items-center gap-4">
+                    <span className="text-4xl">🏆</span>
+                    <div>
+                      <p className="text-sm font-black text-emerald-400 uppercase tracking-[0.4em]">Vendas Fechadas</p>
+                      <p className="text-xs font-bold text-zinc-600 uppercase tracking-widest">Adsplay Labs · em tempo real</p>
+                    </div>
+                  </div>
+
+                  {sales.length === 0 ? (
+                    <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center gap-4">
+                      <span className="text-7xl opacity-40">📭</span>
+                      <p className="text-2xl font-black text-zinc-600 uppercase tracking-widest">Aguardando a próxima venda</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Featured (latest) sale */}
+                      {top && (
+                        <motion.div
+                          key={top.id}
+                          initial={{ opacity: 0, scale: 0.98 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ duration: 0.5 }}
+                          className="relative z-10 rounded-[2rem] border border-emerald-500/20 bg-gradient-to-br from-emerald-950/40 to-zinc-900/60 p-10 flex items-center justify-between gap-8"
+                        >
+                          <div className="space-y-3 min-w-0">
+                            <span className="inline-block px-4 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-black uppercase tracking-widest">
+                              Última venda · {top.squad || '—'}
+                            </span>
+                            <p className="text-4xl font-black text-white leading-tight truncate">{top.executivo || top.squad || 'Venda fechada'}</p>
+                            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm font-bold text-zinc-400">
+                              {top.status && <span>{top.status}</span>}
+                              {top.pi && <span className="text-zinc-500">PI: <span className="text-zinc-300">{top.pi}</span></span>}
+                              {top.periodo && <span className="text-zinc-500">Período: <span className="text-zinc-300">{top.periodo}</span></span>}
+                              {top.cs && <span className="text-zinc-500">CS: <span className="text-zinc-300">{top.cs}</span></span>}
+                            </div>
+                          </div>
+                          {showValue(top) && (
+                            <div className="text-right shrink-0">
+                              <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Investimento</p>
+                              <p className="text-[clamp(2rem,5vw,4rem)] font-black text-transparent bg-clip-text bg-gradient-to-b from-emerald-300 to-emerald-500 leading-none"
+                                 style={{ filter: 'drop-shadow(0 0 30px rgba(16,185,129,0.3))' }}>
+                                {showValue(top)}
+                              </p>
+                            </div>
+                          )}
+                        </motion.div>
+                      )}
+
+                      {/* Previous sales (up to 4, smaller) */}
+                      {rest.length > 0 && (
+                        <div className="relative z-10 grid grid-cols-4 gap-4 flex-1">
+                          {rest.map((s) => (
+                            <div key={s.id} className="rounded-2xl border border-white/5 bg-white/[0.03] p-5 flex flex-col justify-between">
+                              <div className="space-y-1 min-w-0">
+                                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest truncate">{s.squad || '—'}</p>
+                                <p className="text-base font-black text-white leading-tight line-clamp-2">{s.executivo || 'Venda'}</p>
+                                {s.status && <p className="text-[11px] font-bold text-zinc-500 truncate">{s.status}</p>}
+                              </div>
+                              {showValue(s) && (
+                                <p className="text-lg font-black text-emerald-400 mt-3 truncate">{showValue(s)}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Unknown Media Type Fallback */}
-            {!['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'CAROUSEL', 'NEWS_CLIPPING', 'MONTHLY_GOAL', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT'].includes(currentMedia.type) && (
+            {!['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'CAROUSEL', 'NEWS_CLIPPING', 'MONTHLY_GOAL', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT', 'SMART_SALES'].includes(currentMedia.type) && (
               <div className="w-full h-full flex flex-col items-center justify-center text-white bg-zinc-900">
                 <p className="text-2xl font-bold">Tipo de mídia desconhecido</p>
                 <p className="text-zinc-500">{currentMedia.type}</p>

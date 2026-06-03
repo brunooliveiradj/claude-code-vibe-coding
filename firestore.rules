@@ -156,5 +156,13 @@ service cloud.firestore {
       allow create: if isContentManager();
       allow delete: if isContentManager() && resource.data.uploadedBy == request.auth.uid;
     }
+
+    // Smart Media — Sales feed. Written ONLY by the Apps Script ingestion
+    // (service account via REST, which bypasses these rules). Clients can read
+    // (public, for the TV player) but never write — prevents spam from the browser.
+    match /sales/{saleId} {
+      allow read: if true;
+      allow write: if false;
+    }
   }
 }
