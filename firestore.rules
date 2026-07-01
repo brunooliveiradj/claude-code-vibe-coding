@@ -51,7 +51,7 @@ service cloud.firestore {
     function isValidMedia(data) {
       return data.keys().hasAll(['title', 'type', 'payload']) &&
              data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
-             data.type in ['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'MONTHLY_GOAL', 'CAROUSEL', 'NEWS_CLIPPING', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT'] &&
+             data.type in ['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'MONTHLY_GOAL', 'CAROUSEL', 'NEWS_CLIPPING', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT', 'SMART_SALES', 'WC_BRAZIL', 'WC_TODAY', 'WC_BRACKET'] &&
              data.payload is map &&
              (!('company' in data) || data.company in ['Adsplay', 'Mootag', 'Geral']) &&
              data.keys().hasOnly(['title', 'type', 'payload', 'company', 'createdAt', 'updatedAt']);
@@ -99,13 +99,22 @@ service cloud.firestore {
              oldData.type == 'WEATHER';
     }
 
+    // World Cup cards let the public player refresh their cached match data
+    // (payload) via Gemini. Only the payload/updatedAt may change, and only on
+    // an existing World Cup media doc.
+    function isWorldCupUpdateOnly(newData, oldData) {
+      return newData.diff(oldData).affectedKeys().hasOnly(['payload', 'updatedAt']) &&
+             oldData.type in ['WC_BRAZIL', 'WC_TODAY', 'WC_BRACKET'];
+    }
+
     // Rules
     match /media/{mediaId} {
       allow read: if true; // Public for player
       allow create: if isContentManager() && isValidMedia(request.resource.data);
-      allow update: if (isContentManager() && isValidMedia(request.resource.data)) || 
+      allow update: if (isContentManager() && isValidMedia(request.resource.data)) ||
                        isNewsUpdateOnly(request.resource.data, resource.data) ||
-                       isWeatherUpdateOnly(request.resource.data, resource.data);
+                       isWeatherUpdateOnly(request.resource.data, resource.data) ||
+                       isWorldCupUpdateOnly(request.resource.data, resource.data);
       allow delete: if isContentManager();
     }
 

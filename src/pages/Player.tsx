@@ -41,12 +41,14 @@ import {
   CloudLightning,
   Snowflake,
   CloudFog,
-  Globe
+  Globe,
+  Trophy
 } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { GoogleGenAI } from "@google/genai";
+import { fetchWorldCupData, WC_CACHE_MS, wcResultLetter, WCType } from '../lib/worldcup';
 import {
   collection,
   doc,
@@ -64,7 +66,7 @@ import {
 interface Media {
   id: string;
   title: string;
-  type: 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'NORTH_STAR' | 'WEATHER' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES';
+  type: 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'NORTH_STAR' | 'WEATHER' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES' | 'WC_BRAZIL' | 'WC_TODAY' | 'WC_BRACKET';
   payload: any;
 }
 
@@ -634,6 +636,7 @@ export function Player() {
   }, [promptDismissed]);
   const [isFetchingNews, setIsFetchingNews] = useState(false);
   const [isFetchingWeather, setIsFetchingWeather] = useState(false);
+  const [isFetchingWC, setIsFetchingWC] = useState(false);
   const [newsItems, setNewsItems] = useState<any[]>([]);
 
   const shouldUpdateNews = (lastUpdateMs?: number) => {
@@ -802,6 +805,58 @@ export function Player() {
       console.error('Error fetching weather:', err);
     } finally {
       setIsFetchingWeather(false);
+    }
+  };
+
+  // World Cup cards: refresh cached match data via Gemini + Google Search,
+  // then persist it to the media payload (same caching approach as weather).
+  // HYBRID: skip auto-refresh when an admin froze the card (autoRefresh === false).
+  const fetchWorldCup = async (media: Media) => {
+    const wcType = media.type as WCType;
+    if (wcType !== 'WC_BRAZIL' && wcType !== 'WC_TODAY' && wcType !== 'WC_BRACKET') return;
+
+    // Only update if visible to save quota
+    if (document.visibilityState !== 'visible') return;
+
+    // Admin override: manual data locked, don't overwrite it
+    if (media.payload?.autoRefresh === false) return;
+
+    const cacheDuration = WC_CACHE_MS[wcType];
+    const lastUpdate = media.payload?.lastWCUpdate;
+    if (lastUpdate && (Date.now() - lastUpdate < cacheDuration)) return;
+
+    if (isFetchingWC) return;
+    setIsFetchingWC(true);
+
+    // Jitter (0-2 min) so multiple TVs don't all refetch at the same second
+    const jitter = Math.floor(Math.random() * 120000);
+    await new Promise(resolve => setTimeout(resolve, jitter));
+
+    // Re-check after jitter in case another device already refreshed it
+    try {
+      const latestDoc = await getDoc(doc(db, 'media', media.id));
+      const latest = latestDoc.data()?.payload;
+      if (latest?.autoRefresh === false) { setIsFetchingWC(false); return; }
+      if (latest?.lastWCUpdate && (Date.now() - latest.lastWCUpdate < cacheDuration)) {
+        setIsFetchingWC(false);
+        return;
+      }
+    } catch (e) {
+      // fall through and try to fetch anyway
+    }
+
+    try {
+      const data = await fetchWorldCupData(wcType);
+      if (data) {
+        await updateDoc(doc(db, 'media', media.id), {
+          'payload': { ...media.payload, ...data, lastWCUpdate: Date.now() },
+          updatedAt: serverTimestamp()
+        }).catch(err => console.error('Error updating World Cup cache:', err));
+      }
+    } catch (err) {
+      console.error('Error fetching World Cup data:', err);
+    } finally {
+      setIsFetchingWC(false);
     }
   };
 
@@ -1013,6 +1068,9 @@ export function Player() {
       fetchNews(currentMedia);
     } else if (currentMedia?.type === 'WEATHER') {
       fetchWeather(currentMedia);
+    } else if (currentMedia?.type === 'WC_BRAZIL' || currentMedia?.type === 'WC_TODAY' || currentMedia?.type === 'WC_BRACKET') {
+      fetchWorldCup(currentMedia);
+      setNewsItems([]);
     } else {
       setNewsItems([]);
     }
@@ -2315,8 +2373,213 @@ export function Player() {
               );
             })()}
 
+            {/* World Cup — Brazil's journey + next match */}
+            {currentMedia.type === 'WC_BRAZIL' && (() => {
+              const p = currentMedia.payload || {};
+              const results = Array.isArray(p.results) ? p.results : [];
+              const next = p.nextMatch || null;
+              const loading = !p.lastWCUpdate && results.length === 0 && !next;
+              return (
+                <div className="w-full h-full bg-gradient-to-br from-[#00401f] via-[#003d1a] to-[#0a0a0a] flex flex-col p-16 gap-10 relative overflow-hidden">
+                  <div className="absolute -top-1/4 right-0 w-[60vw] h-[60vw] bg-yellow-400/10 blur-[180px] rounded-full pointer-events-none" />
+                  <div className="flex items-center gap-5 relative z-10">
+                    <span className="text-7xl">🇧🇷</span>
+                    <div>
+                      <h2 className="text-6xl font-black text-white tracking-tighter leading-none">Seleção Brasileira</h2>
+                      <p className="text-yellow-400 font-black uppercase tracking-[0.3em] text-sm mt-2">Copa do Mundo FIFA 2026</p>
+                    </div>
+                  </div>
+
+                  {loading ? (
+                    <div className="flex-1 flex items-center justify-center text-zinc-500 text-2xl font-bold">Carregando dados da Copa...</div>
+                  ) : (
+                    <div className="flex-1 grid grid-cols-12 gap-10 relative z-10 min-h-0">
+                      <div className="col-span-5 flex flex-col">
+                        <h3 className="text-yellow-400 text-lg font-black uppercase tracking-[0.3em] mb-5">Próximo Jogo</h3>
+                        {next ? (
+                          <div className="flex-1 bg-white/5 border border-white/10 rounded-[2.5rem] p-10 flex flex-col justify-center gap-8 backdrop-blur-sm">
+                            <div className="flex items-center justify-center gap-8">
+                              <div className="flex flex-col items-center gap-3">
+                                <span className="text-7xl">🇧🇷</span>
+                                <span className="text-2xl font-black text-white">BRASIL</span>
+                              </div>
+                              <span className="text-4xl font-black text-zinc-500">×</span>
+                              <div className="flex flex-col items-center gap-3">
+                                <span className="text-7xl">{next.opponentFlag || '🏳️'}</span>
+                                <span className="text-2xl font-black text-white text-center">{(next.opponent || 'A definir').toUpperCase()}</span>
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-center gap-2 text-center">
+                              {next.stage && <span className="px-4 py-1.5 bg-yellow-400/20 text-yellow-300 rounded-full text-xs font-black uppercase tracking-widest">{next.stage}</span>}
+                              <p className="text-3xl font-black text-white">{next.date}{next.time ? ` · ${next.time}` : ''}</p>
+                              {next.venue && <p className="text-zinc-400 font-bold">{next.venue}</p>}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex-1 bg-white/5 border border-white/10 rounded-[2.5rem] p-10 flex items-center justify-center text-center text-zinc-400 text-xl font-bold">Sem jogo agendado</div>
+                        )}
+                      </div>
+
+                      <div className="col-span-7 flex flex-col min-h-0">
+                        <h3 className="text-yellow-400 text-lg font-black uppercase tracking-[0.3em] mb-5">Trajetória</h3>
+                        <div className="flex-1 space-y-3 overflow-hidden">
+                          {results.length === 0 ? (
+                            <div className="h-full flex items-center justify-center text-zinc-500 text-xl font-bold">A seleção ainda não estreou</div>
+                          ) : results.slice(0, 8).map((r: any, i: number) => {
+                            const letter = wcResultLetter(Number(r.brScore) || 0, Number(r.advScore) || 0);
+                            const color = letter === 'V' ? 'bg-emerald-500' : letter === 'D' ? 'bg-rose-500' : 'bg-zinc-500';
+                            return (
+                              <div key={i} className="bg-white/5 border border-white/10 rounded-2xl px-6 py-4 flex items-center gap-5">
+                                <div className={`w-10 h-10 rounded-xl ${color} flex items-center justify-center text-white font-black text-lg shrink-0`}>{letter}</div>
+                                <div className="flex-1 flex items-center gap-3 min-w-0">
+                                  <span className="text-2xl">🇧🇷</span>
+                                  <span className="text-2xl font-black text-white">{Number(r.brScore) || 0}</span>
+                                  <span className="text-zinc-500 font-black">×</span>
+                                  <span className="text-2xl font-black text-white">{Number(r.advScore) || 0}</span>
+                                  <span className="text-2xl">{r.opponentFlag || ''}</span>
+                                  <span className="text-xl font-bold text-zinc-200 truncate">{r.opponent}</span>
+                                </div>
+                                {r.stage && <span className="text-[11px] font-black text-zinc-500 uppercase tracking-widest shrink-0">{r.stage}</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* World Cup — today's matches */}
+            {currentMedia.type === 'WC_TODAY' && (() => {
+              const p = currentMedia.payload || {};
+              const matches = Array.isArray(p.matches) ? p.matches : [];
+              const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+              const loading = !p.lastWCUpdate && matches.length === 0;
+              const showScore = (m: any) => m.homeScore != null && m.awayScore != null;
+              const badge = (m: any) => {
+                if (m.status === 'live') return <span className="px-3 py-1 bg-rose-500 text-white rounded-full text-xs font-black uppercase tracking-widest animate-pulse">Ao Vivo</span>;
+                if (m.status === 'finished') return <span className="px-3 py-1 bg-zinc-700 text-zinc-300 rounded-full text-xs font-black uppercase tracking-widest">Encerrado</span>;
+                return <span className="px-3 py-1 bg-white/10 text-white rounded-full text-xs font-black uppercase tracking-widest">{m.time || '—'}</span>;
+              };
+              return (
+                <div className="w-full h-full bg-gradient-to-br from-[#0a0f2c] via-[#0a0a1f] to-[#050505] flex flex-col p-16 gap-8 relative overflow-hidden">
+                  <div className="absolute -top-1/4 left-0 w-[60vw] h-[60vw] bg-adsplay/10 blur-[180px] rounded-full pointer-events-none" />
+                  <div className="flex items-center justify-between relative z-10">
+                    <div className="flex items-center gap-5">
+                      <div className="w-16 h-16 bg-adsplay/20 rounded-2xl flex items-center justify-center text-adsplay"><Calendar size={32} /></div>
+                      <div>
+                        <h2 className="text-6xl font-black text-white tracking-tighter leading-none">Jogos de Hoje</h2>
+                        <p className="text-adsplay font-black uppercase tracking-[0.3em] text-sm mt-2 capitalize">{today}</p>
+                      </div>
+                    </div>
+                    <span className="text-sm font-black uppercase tracking-[0.3em] text-zinc-500">Copa FIFA 2026</span>
+                  </div>
+
+                  {loading ? (
+                    <div className="flex-1 flex items-center justify-center text-zinc-500 text-2xl font-bold">Carregando jogos de hoje...</div>
+                  ) : matches.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center gap-4 text-zinc-500">
+                      <Calendar size={80} className="text-zinc-800" />
+                      <p className="text-3xl font-black">Nenhum jogo hoje</p>
+                    </div>
+                  ) : (
+                    <div className={`flex-1 grid gap-5 relative z-10 min-h-0 ${matches.length > 4 ? 'grid-cols-2 content-start' : 'grid-cols-1'}`}>
+                      {matches.slice(0, 8).map((m: any, i: number) => (
+                        <div key={i} className="bg-white/5 border border-white/10 rounded-[2rem] px-8 py-6 flex items-center gap-6 backdrop-blur-sm">
+                          <div className="flex-1 flex items-center justify-end gap-4 min-w-0">
+                            <span className="text-2xl font-black text-white truncate text-right">{(m.home || '').toUpperCase()}</span>
+                            <span className="text-5xl">{m.homeFlag || '🏳️'}</span>
+                          </div>
+                          <div className="flex flex-col items-center gap-2 shrink-0 min-w-[130px]">
+                            {showScore(m) ? (
+                              <span className="text-4xl font-black text-white">{m.homeScore} <span className="text-zinc-600">×</span> {m.awayScore}</span>
+                            ) : (
+                              <span className="text-3xl font-black text-zinc-500">×</span>
+                            )}
+                            {badge(m)}
+                          </div>
+                          <div className="flex-1 flex items-center gap-4 min-w-0">
+                            <span className="text-5xl">{m.awayFlag || '🏳️'}</span>
+                            <span className="text-2xl font-black text-white truncate">{(m.away || '').toUpperCase()}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* World Cup — knockout bracket */}
+            {currentMedia.type === 'WC_BRACKET' && (() => {
+              const p = currentMedia.payload || {};
+              const rounds = Array.isArray(p.rounds) ? p.rounds : [];
+              const loading = !p.lastWCUpdate && rounds.length === 0;
+              const winner = (m: any) => {
+                if (m.homeScore == null || m.awayScore == null) return 0;
+                if (m.homeScore > m.awayScore) return 1;
+                if (m.awayScore > m.homeScore) return 2;
+                return 0;
+              };
+              return (
+                <div className="w-full h-full bg-gradient-to-br from-[#1a0a2e] via-[#0f0a1f] to-[#050505] flex flex-col p-14 gap-8 relative overflow-hidden">
+                  <div className="absolute -top-1/4 right-0 w-[60vw] h-[60vw] bg-yellow-400/10 blur-[180px] rounded-full pointer-events-none" />
+                  <div className="flex items-center gap-5 relative z-10">
+                    <div className="w-16 h-16 bg-yellow-400/20 rounded-2xl flex items-center justify-center text-yellow-400"><Trophy size={32} /></div>
+                    <div>
+                      <h2 className="text-6xl font-black text-white tracking-tighter leading-none">Mata-Mata</h2>
+                      <p className="text-yellow-400 font-black uppercase tracking-[0.3em] text-sm mt-2">Copa do Mundo FIFA 2026</p>
+                    </div>
+                  </div>
+
+                  {loading ? (
+                    <div className="flex-1 flex items-center justify-center text-zinc-500 text-2xl font-bold">Carregando chaveamento...</div>
+                  ) : rounds.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center gap-4 text-zinc-500">
+                      <Trophy size={80} className="text-zinc-800" />
+                      <p className="text-3xl font-black">Mata-mata ainda não começou</p>
+                    </div>
+                  ) : (
+                    <div className="flex-1 flex gap-6 relative z-10 min-h-0 overflow-hidden">
+                      {rounds.slice(0, 5).map((round: any, ri: number) => (
+                        <div key={ri} className="flex-1 flex flex-col min-w-0">
+                          <h3 className="text-yellow-400 text-sm font-black uppercase tracking-[0.2em] mb-4 text-center truncate">{round.name}</h3>
+                          <div className="flex-1 flex flex-col justify-around gap-3">
+                            {(round.matches || []).slice(0, 8).map((m: any, mi: number) => {
+                              const w = winner(m);
+                              return (
+                                <div key={mi} className="bg-white/5 border border-white/10 rounded-2xl p-3 space-y-2">
+                                  <div className={`flex items-center justify-between gap-2 ${w === 1 ? 'opacity-100' : 'opacity-60'}`}>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="text-xl">{m.homeFlag || '🏳️'}</span>
+                                      <span className="text-sm font-black text-white truncate">{m.home || '—'}</span>
+                                    </div>
+                                    <span className="text-lg font-black text-white shrink-0">{m.homeScore ?? ''}</span>
+                                  </div>
+                                  <div className="h-px bg-white/10" />
+                                  <div className={`flex items-center justify-between gap-2 ${w === 2 ? 'opacity-100' : 'opacity-60'}`}>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span className="text-xl">{m.awayFlag || '🏳️'}</span>
+                                      <span className="text-sm font-black text-white truncate">{m.away || '—'}</span>
+                                    </div>
+                                    <span className="text-lg font-black text-white shrink-0">{m.awayScore ?? ''}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {/* Unknown Media Type Fallback */}
-            {!['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'CAROUSEL', 'NEWS_CLIPPING', 'MONTHLY_GOAL', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT', 'SMART_SALES'].includes(currentMedia.type) && (
+            {!['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'CAROUSEL', 'NEWS_CLIPPING', 'MONTHLY_GOAL', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT', 'SMART_SALES', 'WC_BRAZIL', 'WC_TODAY', 'WC_BRACKET'].includes(currentMedia.type) && (
               <div className="w-full h-full flex flex-col items-center justify-center text-white bg-zinc-900">
                 <p className="text-2xl font-bold">Tipo de mídia desconhecido</p>
                 <p className="text-zinc-500">{currentMedia.type}</p>

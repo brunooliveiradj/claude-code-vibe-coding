@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Image as ImageIcon, Video, Youtube, Layout, Trash2, Edit2, Instagram, Upload, Loader2, BarChart3, AlertCircle, Layers, X as XIcon, Newspaper, CloudSun, Star, MapPin, TrendingUp, Globe, HardDrive, CheckCircle2, Zap, Trophy } from 'lucide-react';
+import { Plus, Image as ImageIcon, Video, Youtube, Layout, Trash2, Edit2, Instagram, Upload, Loader2, BarChart3, AlertCircle, Layers, X as XIcon, Newspaper, CloudSun, Star, MapPin, TrendingUp, Globe, HardDrive, CheckCircle2, Zap, Trophy, Flag, Calendar } from 'lucide-react';
 import { auth, db, storage, handleFirestoreError, OperationType } from '../firebase';
 import { ref, uploadBytesResumable, getDownloadURL, getMetadata } from 'firebase/storage';
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { Company } from '../types';
 import { GoogleGenAI } from "@google/genai";
+import { fetchWorldCupData, WCType } from '../lib/worldcup';
 import imageCompression from 'browser-image-compression';
 
-type MediaType = 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'WEATHER' | 'NORTH_STAR' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES';
+type MediaType = 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'WEATHER' | 'NORTH_STAR' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES' | 'WC_BRAZIL' | 'WC_TODAY' | 'WC_BRACKET';
 
 interface Media {
   id: string;
@@ -39,6 +40,7 @@ export function Media() {
 
   const [isSyncingWeather, setIsSyncingWeather] = useState(false);
   const [isSyncingNews, setIsSyncingNews] = useState<number | null>(null);
+  const [isSyncingWC, setIsSyncingWC] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [libraryItems, setLibraryItems] = useState<any[]>([]);
   const [libraryTarget, setLibraryTarget] = useState<'single' | 'carousel' | 'playlist_logo'>('single');
@@ -171,6 +173,28 @@ export function Media() {
       setError('Erro ao sincronizar clima. Tente novamente.');
     } finally {
       setIsSyncingWeather(false);
+    }
+  };
+
+  // Pull fresh World Cup data via IA into the form for review/editing (hybrid).
+  const syncWorldCup = async (wcType: MediaType) => {
+    setIsSyncingWC(true);
+    setError(null);
+    try {
+      const data = await fetchWorldCupData(wcType as WCType);
+      if (data) {
+        setPayload({
+          ...payload,
+          ...data,
+          lastWCUpdate: Date.now(),
+          autoRefresh: payload.autoRefresh !== false,
+        });
+      }
+    } catch (err: any) {
+      console.error('World Cup sync error:', err);
+      setError('Erro ao sincronizar dados da Copa. Tente novamente.');
+    } finally {
+      setIsSyncingWC(false);
     }
   };
 
@@ -479,6 +503,9 @@ export function Media() {
       case 'WEBSITE_EMBED': return <Globe size={20} />;
       case 'FINAL_SPRINT': return <Zap size={20} />;
       case 'SMART_SALES': return <Trophy size={20} />;
+      case 'WC_BRAZIL': return <Flag size={20} />;
+      case 'WC_TODAY': return <Calendar size={20} />;
+      case 'WC_BRACKET': return <Trophy size={20} />;
     }
   };
 
@@ -713,6 +740,33 @@ export function Media() {
                   </div>
                 </div>
               )}
+              {item.type === 'WC_BRAZIL' && (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#00401f] to-[#0a0a0a] p-6 space-y-2 text-center">
+                  <span className="text-4xl">🇧🇷</span>
+                  <p className="text-sm font-black text-white leading-tight">Seleção Brasileira</p>
+                  <p className="text-[9px] font-bold text-yellow-400 uppercase tracking-widest">
+                    {(item.payload.results || []).length} jogos · {item.payload.nextMatch ? 'próx. jogo definido' : 'sem próximo jogo'}
+                  </p>
+                </div>
+              )}
+              {item.type === 'WC_TODAY' && (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#0a0f2c] to-[#050505] p-6 space-y-2 text-center">
+                  <Calendar size={32} className="text-adsplay" />
+                  <p className="text-sm font-black text-white leading-tight">Jogos de Hoje</p>
+                  <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
+                    {(item.payload.matches || []).length} jogos · Copa 2026
+                  </p>
+                </div>
+              )}
+              {item.type === 'WC_BRACKET' && (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#1a0a2e] to-[#050505] p-6 space-y-2 text-center">
+                  <Trophy size={32} className="text-yellow-400" />
+                  <p className="text-sm font-black text-white leading-tight">Mata-Mata</p>
+                  <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">
+                    {(item.payload.rounds || []).length} fases · Copa 2026
+                  </p>
+                </div>
+              )}
               <div className="absolute top-3 left-3 bg-black/50 backdrop-blur-md text-white p-2 rounded-lg">
                 {getIcon(item.type)}
               </div>
@@ -867,6 +921,15 @@ export function Media() {
                           }
                           if (t === 'SMART_SALES') {
                             setPayload({ valueDisplay: 'full', scope: 'latest' });
+                          }
+                          if (t === 'WC_BRAZIL' && !payload.results) {
+                            setPayload({ results: [], nextMatch: null, autoRefresh: true });
+                          }
+                          if (t === 'WC_TODAY' && !payload.matches) {
+                            setPayload({ matches: [], autoRefresh: true });
+                          }
+                          if (t === 'WC_BRACKET' && !payload.rounds) {
+                            setPayload({ rounds: [], autoRefresh: true });
                           }
                         }}
                         className={`p-3 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${
@@ -1833,6 +1896,170 @@ export function Media() {
                       </div>
                     </div>
                   )}
+
+                  {(type === 'WC_BRAZIL' || type === 'WC_TODAY' || type === 'WC_BRACKET') && (() => {
+                    const inputCls = "w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all";
+                    const parseScore = (v: string) => (v === '' ? null : Number(v));
+                    return (
+                    <div className="space-y-6">
+                      <div className="bg-zinc-50 p-6 rounded-[2rem] border border-zinc-100 space-y-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-adsplay/10 rounded-xl flex items-center justify-center text-adsplay">
+                              {getIcon(type)}
+                            </div>
+                            <div>
+                              <p className="text-xs font-black text-zinc-900 uppercase tracking-widest">Modo Copa do Mundo</p>
+                              <p className="text-[10px] text-zinc-400 font-medium">A IA busca os dados reais; revise e corrija abaixo se precisar.</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={isSyncingWC}
+                            onClick={() => syncWorldCup(type)}
+                            className="text-[10px] font-black bg-white border border-zinc-200 px-4 py-2 rounded-full hover:bg-zinc-50 transition-colors uppercase tracking-widest flex items-center gap-2 disabled:opacity-50 shrink-0"
+                          >
+                            {isSyncingWC ? <Loader2 className="animate-spin" size={12} /> : <TrendingUp size={12} />}
+                            {isSyncingWC ? 'Buscando...' : 'Sincronizar via IA'}
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 bg-white rounded-2xl border border-zinc-100">
+                          <div>
+                            <p className="text-[11px] font-black text-zinc-700 uppercase tracking-widest">Atualização automática</p>
+                            <p className="text-[9px] text-zinc-400 font-medium">{payload.autoRefresh === false ? 'Travado — a TV mostra só suas edições manuais.' : 'A TV atualiza sozinha pela IA.'}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setPayload({ ...payload, autoRefresh: payload.autoRefresh === false ? true : false })}
+                            className={`w-12 h-7 rounded-full transition-all relative shrink-0 ${payload.autoRefresh === false ? 'bg-zinc-300' : 'bg-emerald-500'}`}
+                          >
+                            <span className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-all ${payload.autoRefresh === false ? 'left-1' : 'left-6'}`} />
+                          </button>
+                        </div>
+
+                        {payload.lastWCUpdate && (
+                          <p className="text-[9px] text-zinc-400 font-black uppercase tracking-widest text-center">
+                            Última sincronização: {new Date(payload.lastWCUpdate).toLocaleString('pt-BR')}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* WC_BRAZIL — next match + results */}
+                      {type === 'WC_BRAZIL' && (
+                        <div className="space-y-5">
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Próximo Jogo (Brasil × ...)</label>
+                            <div className="grid grid-cols-2 gap-2">
+                              <input className={inputCls} placeholder="Adversário" value={payload.nextMatch?.opponent || ''} onChange={e => setPayload({ ...payload, nextMatch: { ...(payload.nextMatch || {}), opponent: e.target.value } })} />
+                              <input className={inputCls} placeholder="Bandeira (emoji)" value={payload.nextMatch?.opponentFlag || ''} onChange={e => setPayload({ ...payload, nextMatch: { ...(payload.nextMatch || {}), opponentFlag: e.target.value } })} />
+                              <input className={inputCls} placeholder="Data (DD/MM/AAAA)" value={payload.nextMatch?.date || ''} onChange={e => setPayload({ ...payload, nextMatch: { ...(payload.nextMatch || {}), date: e.target.value } })} />
+                              <input className={inputCls} placeholder="Hora (HH:MM)" value={payload.nextMatch?.time || ''} onChange={e => setPayload({ ...payload, nextMatch: { ...(payload.nextMatch || {}), time: e.target.value } })} />
+                              <input className={inputCls} placeholder="Fase" value={payload.nextMatch?.stage || ''} onChange={e => setPayload({ ...payload, nextMatch: { ...(payload.nextMatch || {}), stage: e.target.value } })} />
+                              <input className={inputCls} placeholder="Estádio, Cidade" value={payload.nextMatch?.venue || ''} onChange={e => setPayload({ ...payload, nextMatch: { ...(payload.nextMatch || {}), venue: e.target.value } })} />
+                            </div>
+                            {payload.nextMatch && (
+                              <button type="button" onClick={() => setPayload({ ...payload, nextMatch: null })} className="text-[10px] text-rose-500 font-black uppercase tracking-widest">Limpar próximo jogo</button>
+                            )}
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Resultados do Brasil</label>
+                            <div className="space-y-2">
+                              {(payload.results || []).map((r: any, i: number) => (
+                                <div key={i} className="bg-zinc-50 p-3 rounded-2xl border border-zinc-100 relative">
+                                  <button type="button" onClick={() => { const l = (payload.results || []).filter((_: any, j: number) => j !== i); setPayload({ ...payload, results: l }); }} className="absolute top-2 right-2 text-rose-500 hover:bg-rose-50 p-1 rounded-lg"><Trash2 size={12} /></button>
+                                  <div className="grid grid-cols-2 gap-2 pr-6">
+                                    <input className={inputCls} placeholder="Adversário" value={r.opponent || ''} onChange={e => { const l = [...payload.results]; l[i] = { ...l[i], opponent: e.target.value }; setPayload({ ...payload, results: l }); }} />
+                                    <input className={inputCls} placeholder="Bandeira (emoji)" value={r.opponentFlag || ''} onChange={e => { const l = [...payload.results]; l[i] = { ...l[i], opponentFlag: e.target.value }; setPayload({ ...payload, results: l }); }} />
+                                    <div className="flex gap-2">
+                                      <input type="number" className={inputCls} placeholder="BRA" value={r.brScore ?? ''} onChange={e => { const l = [...payload.results]; l[i] = { ...l[i], brScore: Number(e.target.value) }; setPayload({ ...payload, results: l }); }} />
+                                      <input type="number" className={inputCls} placeholder="ADV" value={r.advScore ?? ''} onChange={e => { const l = [...payload.results]; l[i] = { ...l[i], advScore: Number(e.target.value) }; setPayload({ ...payload, results: l }); }} />
+                                    </div>
+                                    <input className={inputCls} placeholder="Fase" value={r.stage || ''} onChange={e => { const l = [...payload.results]; l[i] = { ...l[i], stage: e.target.value }; setPayload({ ...payload, results: l }); }} />
+                                  </div>
+                                </div>
+                              ))}
+                              <button type="button" onClick={() => setPayload({ ...payload, results: [...(payload.results || []), { opponent: '', opponentFlag: '', brScore: 0, advScore: 0, stage: '' }] })} className="w-full py-3 border-2 border-dashed border-zinc-100 rounded-2xl flex items-center justify-center gap-2 text-zinc-400 hover:bg-zinc-50 transition-all">
+                                <Plus size={14} /><span className="text-[10px] font-black uppercase tracking-widest">Adicionar Resultado</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* WC_TODAY — today's matches */}
+                      {type === 'WC_TODAY' && (
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Jogos de Hoje</label>
+                          <div className="space-y-2">
+                            {(payload.matches || []).map((m: any, i: number) => (
+                              <div key={i} className="bg-zinc-50 p-3 rounded-2xl border border-zinc-100 relative">
+                                <button type="button" onClick={() => { const l = (payload.matches || []).filter((_: any, j: number) => j !== i); setPayload({ ...payload, matches: l }); }} className="absolute top-2 right-2 text-rose-500 hover:bg-rose-50 p-1 rounded-lg"><Trash2 size={12} /></button>
+                                <div className="grid grid-cols-2 gap-2 pr-6">
+                                  <input className={inputCls} placeholder="Mandante" value={m.home || ''} onChange={e => { const l = [...payload.matches]; l[i] = { ...l[i], home: e.target.value }; setPayload({ ...payload, matches: l }); }} />
+                                  <input className={inputCls} placeholder="Bandeira mandante" value={m.homeFlag || ''} onChange={e => { const l = [...payload.matches]; l[i] = { ...l[i], homeFlag: e.target.value }; setPayload({ ...payload, matches: l }); }} />
+                                  <input className={inputCls} placeholder="Visitante" value={m.away || ''} onChange={e => { const l = [...payload.matches]; l[i] = { ...l[i], away: e.target.value }; setPayload({ ...payload, matches: l }); }} />
+                                  <input className={inputCls} placeholder="Bandeira visitante" value={m.awayFlag || ''} onChange={e => { const l = [...payload.matches]; l[i] = { ...l[i], awayFlag: e.target.value }; setPayload({ ...payload, matches: l }); }} />
+                                  <div className="flex gap-2">
+                                    <input type="number" className={inputCls} placeholder="Gols M" value={m.homeScore ?? ''} onChange={e => { const l = [...payload.matches]; l[i] = { ...l[i], homeScore: parseScore(e.target.value) }; setPayload({ ...payload, matches: l }); }} />
+                                    <input type="number" className={inputCls} placeholder="Gols V" value={m.awayScore ?? ''} onChange={e => { const l = [...payload.matches]; l[i] = { ...l[i], awayScore: parseScore(e.target.value) }; setPayload({ ...payload, matches: l }); }} />
+                                  </div>
+                                  <input className={inputCls} placeholder="Hora (HH:MM)" value={m.time || ''} onChange={e => { const l = [...payload.matches]; l[i] = { ...l[i], time: e.target.value }; setPayload({ ...payload, matches: l }); }} />
+                                  <input className={inputCls} placeholder="Fase" value={m.stage || ''} onChange={e => { const l = [...payload.matches]; l[i] = { ...l[i], stage: e.target.value }; setPayload({ ...payload, matches: l }); }} />
+                                  <select className={inputCls} value={m.status || 'scheduled'} onChange={e => { const l = [...payload.matches]; l[i] = { ...l[i], status: e.target.value }; setPayload({ ...payload, matches: l }); }}>
+                                    <option value="scheduled">A começar</option>
+                                    <option value="live">Ao vivo</option>
+                                    <option value="finished">Encerrado</option>
+                                  </select>
+                                </div>
+                              </div>
+                            ))}
+                            <button type="button" onClick={() => setPayload({ ...payload, matches: [...(payload.matches || []), { home: '', homeFlag: '', away: '', awayFlag: '', homeScore: null, awayScore: null, time: '', stage: '', status: 'scheduled' }] })} className="w-full py-3 border-2 border-dashed border-zinc-100 rounded-2xl flex items-center justify-center gap-2 text-zinc-400 hover:bg-zinc-50 transition-all">
+                              <Plus size={14} /><span className="text-[10px] font-black uppercase tracking-widest">Adicionar Jogo</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* WC_BRACKET — knockout rounds */}
+                      {type === 'WC_BRACKET' && (
+                        <div className="space-y-3">
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Chaveamento (Mata-Mata)</label>
+                          {(payload.rounds || []).map((round: any, ri: number) => (
+                            <div key={ri} className="bg-zinc-50 p-4 rounded-2xl border border-zinc-100 space-y-3">
+                              <div className="flex items-center gap-2">
+                                <input className={inputCls} placeholder="Nome da fase (ex: Oitavas de Final)" value={round.name || ''} onChange={e => { const l = [...payload.rounds]; l[ri] = { ...l[ri], name: e.target.value }; setPayload({ ...payload, rounds: l }); }} />
+                                <button type="button" onClick={() => { const l = (payload.rounds || []).filter((_: any, j: number) => j !== ri); setPayload({ ...payload, rounds: l }); }} className="text-rose-500 hover:bg-rose-50 p-2 rounded-lg shrink-0"><Trash2 size={14} /></button>
+                              </div>
+                              <div className="space-y-2 pl-2 border-l-2 border-zinc-200">
+                                {(round.matches || []).map((m: any, mi: number) => (
+                                  <div key={mi} className="grid grid-cols-2 gap-2 items-center bg-white p-2 rounded-xl border border-zinc-100 relative">
+                                    <input className={inputCls} placeholder="Time A" value={m.home || ''} onChange={e => { const l = [...payload.rounds]; const ms = [...(l[ri].matches || [])]; ms[mi] = { ...ms[mi], home: e.target.value }; l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} />
+                                    <div className="flex gap-2">
+                                      <input className={inputCls} placeholder="🏳️" value={m.homeFlag || ''} onChange={e => { const l = [...payload.rounds]; const ms = [...(l[ri].matches || [])]; ms[mi] = { ...ms[mi], homeFlag: e.target.value }; l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} />
+                                      <input type="number" className={inputCls} placeholder="—" value={m.homeScore ?? ''} onChange={e => { const l = [...payload.rounds]; const ms = [...(l[ri].matches || [])]; ms[mi] = { ...ms[mi], homeScore: parseScore(e.target.value) }; l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} />
+                                    </div>
+                                    <input className={inputCls} placeholder="Time B" value={m.away || ''} onChange={e => { const l = [...payload.rounds]; const ms = [...(l[ri].matches || [])]; ms[mi] = { ...ms[mi], away: e.target.value }; l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} />
+                                    <div className="flex gap-2">
+                                      <input className={inputCls} placeholder="🏳️" value={m.awayFlag || ''} onChange={e => { const l = [...payload.rounds]; const ms = [...(l[ri].matches || [])]; ms[mi] = { ...ms[mi], awayFlag: e.target.value }; l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} />
+                                      <input type="number" className={inputCls} placeholder="—" value={m.awayScore ?? ''} onChange={e => { const l = [...payload.rounds]; const ms = [...(l[ri].matches || [])]; ms[mi] = { ...ms[mi], awayScore: parseScore(e.target.value) }; l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} />
+                                    </div>
+                                    <button type="button" onClick={() => { const l = [...payload.rounds]; const ms = (l[ri].matches || []).filter((_: any, j: number) => j !== mi); l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} className="col-span-2 text-[9px] text-rose-500 font-black uppercase tracking-widest text-right">Remover confronto</button>
+                                  </div>
+                                ))}
+                                <button type="button" onClick={() => { const l = [...payload.rounds]; const ms = [...(l[ri].matches || []), { home: '', homeFlag: '', away: '', awayFlag: '', homeScore: null, awayScore: null }]; l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} className="text-[10px] font-black text-adsplay uppercase tracking-widest flex items-center gap-1"><Plus size={12} /> Confronto</button>
+                              </div>
+                            </div>
+                          ))}
+                          <button type="button" onClick={() => setPayload({ ...payload, rounds: [...(payload.rounds || []), { name: '', matches: [] }] })} className="w-full py-3 border-2 border-dashed border-zinc-100 rounded-2xl flex items-center justify-center gap-2 text-zinc-400 hover:bg-zinc-50 transition-all">
+                            <Plus size={14} /><span className="text-[10px] font-black uppercase tracking-widest">Adicionar Fase</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    );
+                  })()}
 
                   </div>
                 </div>
