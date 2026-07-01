@@ -204,15 +204,30 @@ export function normalizeMatchItem(item: any): WCMatch | null {
   };
 }
 
-// Parse a pasted base dump into normalized matches (idempotent ids).
+const looksLikeMatch = (o: any) => o && typeof o === 'object' && (o.equipe_casa || o.home || o.mandante);
+
+// Finds the array of matches in an object regardless of the key name used
+// (todos_os_jogos, jogos_recentes, fase_mata_mata, matches, jogos, ...).
+const findMatchArray = (obj: any): any[] | null => {
+  if (!obj || typeof obj !== 'object') return null;
+  const known = ['todos_os_jogos', 'jogos_recentes', 'fase_mata_mata', 'jogos', 'matches', 'games', 'partidas'];
+  for (const k of known) if (Array.isArray(obj[k]) && obj[k].some(looksLikeMatch)) return obj[k];
+  // generic fallback: first array whose items look like matches
+  for (const v of Object.values(obj)) {
+    if (Array.isArray(v) && v.some(looksLikeMatch)) return v as any[];
+  }
+  return null;
+};
+
+// Parse a pasted base dump into normalized matches (idempotent ids). Accepts
+// a top-level array, or an object with the match array under any key (also
+// nested under `copa_do_mundo`).
 export function parseBaseImport(text: string): WCMatch[] {
   const data = parseLooseJson(text);
   if (!data) return [];
-  const list =
-    data?.copa_do_mundo?.jogos_recentes ??
-    data?.jogos_recentes ??
-    data?.matches ??
-    (Array.isArray(data) ? data : []);
+  const list = Array.isArray(data)
+    ? data
+    : (findMatchArray(data?.copa_do_mundo) || findMatchArray(data) || []);
   return (Array.isArray(list) ? list : [])
     .map(normalizeMatchItem)
     .filter((m): m is WCMatch => !!m);
