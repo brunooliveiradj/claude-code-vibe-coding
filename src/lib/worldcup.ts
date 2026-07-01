@@ -157,23 +157,35 @@ export const knockoutOrder = (stage?: string): number => {
 
 // --- Import parser (accepts the "copa_do_mundo.jogos_recentes" shape) --------
 
-// Tolerant JSON parse (models grounded with Search wrap JSON in fences/prose).
+// Fixes the paste corruptions that most often break JSON.parse: smart/curly
+// quotes, non-breaking spaces, and trailing commas before } or ].
+const sanitizeJson = (s: string): string =>
+  s
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"')  // smart double quotes
+    .replace(/[\u2018\u2019\u201A\u201B\u2032]/g, "'")         // smart single quotes
+    .replace(/[\u00A0\u2007\u202F\u2000-\u200A]/g, ' ')        // non-breaking / thin spaces
+    .replace(/,\s*([}\]])/g, '$1');                               // trailing commas
+
+// Tolerant JSON parse. Grounded IA output wraps JSON in fences/prose, and
+// pasted JSON often carries smart quotes / trailing commas — handle both.
 export function parseLooseJson(text: string): any | null {
   if (!text) return null;
-  let s = text.trim();
-  s = s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-  try {
-    return JSON.parse(s);
-  } catch {
-    const first = s.indexOf('{');
-    const last = s.lastIndexOf('}');
-    if (first !== -1 && last > first) {
-      try { return JSON.parse(s.slice(first, last + 1)); } catch { /* fall through */ }
-    }
-    const fa = s.indexOf('[');
-    const la = s.lastIndexOf(']');
-    if (fa !== -1 && la > fa) {
-      try { return JSON.parse(s.slice(fa, la + 1)); } catch { /* fall through */ }
+  let s = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  const tryParse = (str: string): any | undefined => {
+    try { return JSON.parse(str); } catch { return undefined; }
+  };
+
+  for (const candidate of [s, sanitizeJson(s)]) {
+    const direct = tryParse(candidate);
+    if (direct !== undefined) return direct;
+    // extract the outermost {...} or [...] block and retry
+    for (const [open, close] of [['{', '}'], ['[', ']']]) {
+      const f = candidate.indexOf(open);
+      const l = candidate.lastIndexOf(close);
+      if (f !== -1 && l > f) {
+        const r = tryParse(candidate.slice(f, l + 1));
+        if (r !== undefined) return r;
+      }
     }
   }
   return null;
