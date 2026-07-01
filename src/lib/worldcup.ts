@@ -250,8 +250,29 @@ export function parseBaseImport(text: string): WCMatch[] {
 const byDateAsc = (a: WCMatch, b: WCMatch) =>
   `${a.date || ''} ${a.time || ''}`.localeCompare(`${b.date || ''} ${b.time || ''}`);
 
+// Two imports with different name spellings for the same fixture (e.g.
+// "Congo DR" vs "República Democrática do Congo") create separate docs.
+// Collapse them by date + country codes (falling back to normalized names),
+// keeping the most complete record (finished/scored wins).
+const matchKey = (m: WCMatch) =>
+  `${m.date || ''}|${(m.homeCode || norm(m.home)).toLowerCase()}|${(m.awayCode || norm(m.away)).toLowerCase()}`;
+
+const matchRank = (m: WCMatch) =>
+  (m.status === 'finished' ? 100 : m.status === 'live' ? 50 : 0) +
+  (m.homeScore != null && m.awayScore != null ? 10 : 0);
+
+export const dedupeMatches = (matches: WCMatch[]): WCMatch[] => {
+  const best = new Map<string, WCMatch>();
+  for (const m of matches) {
+    const k = matchKey(m);
+    const prev = best.get(k);
+    if (!prev || matchRank(m) > matchRank(prev)) best.set(k, m);
+  }
+  return Array.from(best.values());
+};
+
 export function deriveBrazil(matches: WCMatch[]): { results: WCBrazilResult[]; nextMatch: WCBrazilNext | null } {
-  const br = matches.filter(m => isBrazil(m.home) || isBrazil(m.away)).sort(byDateAsc);
+  const br = dedupeMatches(matches).filter(m => isBrazil(m.home) || isBrazil(m.away)).sort(byDateAsc);
   const results: WCBrazilResult[] = br
     .filter(m => m.status === 'finished')
     .map(m => {
@@ -283,11 +304,11 @@ export function deriveBrazil(matches: WCMatch[]): { results: WCBrazilResult[]; n
 }
 
 export function deriveToday(matches: WCMatch[], todayISO: string): WCMatch[] {
-  return matches.filter(m => m.date === todayISO).sort(byDateAsc);
+  return dedupeMatches(matches).filter(m => m.date === todayISO).sort(byDateAsc);
 }
 
 export function deriveBracket(matches: WCMatch[]): WCBracketRound[] {
-  const ko = matches.filter(m => isKnockoutStage(m.stage));
+  const ko = dedupeMatches(matches).filter(m => isKnockoutStage(m.stage));
   const byStage: Record<string, WCMatch[]> = {};
   ko.forEach(m => {
     const key = m.stage || 'Mata-mata';
