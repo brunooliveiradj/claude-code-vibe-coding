@@ -287,6 +287,25 @@ export function Media() {
     }
   };
 
+  // Wipe the whole shared collection so you can reimport a clean, single base
+  // (avoids duplicates left by earlier imports with different name spellings).
+  const clearWcBase = async () => {
+    if (!window.confirm('Apagar TODOS os jogos da base da Copa? A coleção será limpa e você poderá reimportar em seguida.')) return;
+    setWcBusy('clear');
+    setWcMsg(null);
+    try {
+      const snap = await getDocs(collection(db, 'wc_matches'));
+      await Promise.all(snap.docs.map(d => deleteDoc(doc(db, 'wc_matches', d.id))));
+      await loadWcMatches();
+      setWcMsg({ ok: true, text: '🧹 Base limpa. Agora cole o JSON definitivo e clique em Importar.' });
+    } catch (e: any) {
+      console.error('WC clear error:', e);
+      setWcMsg({ ok: false, text: `Erro ao limpar a base: ${e?.message || 'tente novamente'}` });
+    } finally {
+      setWcBusy(null);
+    }
+  };
+
   const fetchMedia = async () => {
     try {
       const q = query(collection(db, 'media'), orderBy('createdAt', 'desc'));
@@ -2034,6 +2053,9 @@ export function Media() {
                           </button>
                           <button type="button" disabled={!!wcBusy} onClick={loadWcMatches} className="px-4 py-2 bg-white border border-zinc-200 text-zinc-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-zinc-50 transition-all disabled:opacity-50">
                             {wcBusy === 'load' ? 'Carregando...' : 'Recarregar'}
+                          </button>
+                          <button type="button" disabled={!!wcBusy} onClick={clearWcBase} className="px-4 py-2 bg-white border border-rose-200 text-rose-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 transition-all disabled:opacity-50 flex items-center gap-2">
+                            <Trash2 size={12} /> {wcBusy === 'clear' ? 'Limpando...' : 'Limpar base'}
                           </button>
                         </div>
 
