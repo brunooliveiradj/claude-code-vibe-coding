@@ -54,8 +54,37 @@ export interface WCBracketRound {
   matches: WCMatch[];
 }
 
-// Cache window for the (optional) TV-side refresh of pending matches.
+// Cache window for the broad TV-side refresh of all pending matches.
 export const WC_PENDING_CACHE_MS = 10 * 60 * 1000;
+// A live game refreshes much faster than the broad pending sweep.
+export const WC_LIVE_REFRESH_MS = 60 * 1000;
+// A kicked-off match is treated as live for this long (unless marked finished).
+export const WC_LIVE_WINDOW_MS = 150 * 60 * 1000; // 2h30
+
+// --- Time / live detection (Brazil is fixed GMT-3, no DST) ------------------
+
+// Today's date (YYYY-MM-DD) in Brasília time, regardless of the TV's timezone.
+export const brasiliaTodayISO = (nowMs: number): string =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date(nowMs));
+
+// Kickoff instant (epoch ms) from a match's date + time, read as GMT-3.
+export const kickoffMs = (m: WCMatch): number | null => {
+  if (!m.date) return null;
+  const time = m.time && /^\d{1,2}:\d{2}$/.test(m.time) ? m.time.padStart(5, '0') : '00:00';
+  const t = Date.parse(`${m.date}T${time}:00-03:00`);
+  return isNaN(t) ? null : t;
+};
+
+// A match is "live" if explicitly marked live, or if its GMT-3 kickoff has
+// passed within the live window and it isn't finished yet.
+export const isLiveByClock = (m: WCMatch, nowMs: number): boolean => {
+  if (m.status === 'finished') return false;
+  if (m.status === 'live') return true;
+  const k = kickoffMs(m);
+  return k != null && nowMs >= k && nowMs - k < WC_LIVE_WINDOW_MS;
+};
 
 // --- Flags ------------------------------------------------------------------
 

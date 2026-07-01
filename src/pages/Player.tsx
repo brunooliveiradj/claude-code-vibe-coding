@@ -48,7 +48,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { GoogleGenAI } from "@google/genai";
-import { deriveBrazil, deriveToday, deriveBracket, wcResultLetter, flagUrl, fetchWcPendingUpdates, matchDocId, knockoutOrder, WC_PENDING_CACHE_MS, WCMatch } from '../lib/worldcup';
+import { deriveBrazil, deriveToday, deriveBracket, wcResultLetter, flagUrl, fetchWcPendingUpdates, matchDocId, knockoutOrder, isLiveByClock, brasiliaTodayISO, WC_PENDING_CACHE_MS, WC_LIVE_REFRESH_MS, WCMatch } from '../lib/worldcup';
 import {
   collection,
   doc,
@@ -132,6 +132,8 @@ const TeamFlag = ({ code, emoji, imgClass, emojiClass }: { code?: string; emoji?
       <img
         src={url}
         alt=""
+        loading="lazy"
+        decoding="async"
         referrerPolicy="no-referrer"
         onError={() => setErr(true)}
         className={`inline-block object-cover rounded-[3px] shadow-sm ${imgClass || ''}`}
@@ -657,7 +659,11 @@ export function Player() {
   const [isFetchingWeather, setIsFetchingWeather] = useState(false);
   const [newsItems, setNewsItems] = useState<any[]>([]);
   const [wcMatches, setWcMatches] = useState<WCMatch[] | null>(null);
-  const wcRefreshRef = useRef(0);
+  const wcMatchesRef = useRef<WCMatch[] | null>(null);
+  const wcLastBroadRef = useRef(0);
+  const wcPrevScoresRef = useRef<Record<string, { h: number; a: number }>>({});
+  const [wcGoal, setWcGoal] = useState<{ id: string; side: 'home' | 'away' } | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const shouldUpdateNews = (lastUpdateMs?: number) => {
     if (!lastUpdateMs) return true;
@@ -1045,54 +1051,94 @@ export function Player() {
   // whenever a WC card is on screen. The three cards are just views over it.
   const isWC = currentMedia?.type === 'WC_BRAZIL' || currentMedia?.type === 'WC_TODAY' || currentMedia?.type === 'WC_BRACKET';
   useEffect(() => {
-    if (!isWC) { setWcMatches(null); return; }
+    if (!isWC) { setWcMatches(null); wcMatchesRef.current = null; return; }
     const unsub = onSnapshot(collection(db, 'wc_matches'), (snap) => {
-      setWcMatches(snap.docs.map(d => Object.assign({ id: d.id }, d.data()) as WCMatch));
+      const list = snap.docs.map(d => Object.assign({ id: d.id }, d.data()) as WCMatch);
+      wcMatchesRef.current = list;
+
+      // Goal detection: a match whose score went up since the last snapshot.
+      const prev = wcPrevScoresRef.current;
+      const next: Record<string, { h: number; a: number }> = {};
+      let goal: { id: string; side: 'home' | 'away' } | null = null;
+      for (const m of list) {
+        const h = Number(m.homeScore) || 0, a = Number(m.awayScore) || 0;
+        next[m.id!] = { h, a };
+        const p = prev[m.id!];
+        if (p) {
+          if (h > p.h) goal = { id: m.id!, side: 'home' };
+          else if (a > p.a) goal = { id: m.id!, side: 'away' };
+        }
+      }
+      wcPrevScoresRef.current = next;
+      if (goal) {
+        setWcGoal(goal);
+        setTimeout(() => setWcGoal(g => (g && g.id === goal!.id ? null : g)), 7000);
+      }
+
+      setWcMatches(list);
     }, (err) => console.error('wc_matches subscription error:', err));
     return () => unsub();
   }, [isWC]);
 
+  // Tick every 30s so live-by-clock detection and "AO VIVO" stay current.
+  useEffect(() => {
+    if (!isWC) return;
+    const id = setInterval(() => setNowMs(Date.now()), 30000);
+    return () => clearInterval(id);
+  }, [isWC]);
+
   const wcBrazil = useMemo(() => deriveBrazil(wcMatches || []), [wcMatches]);
-  const wcToday = useMemo(() => deriveToday(wcMatches || [], new Date().toISOString().split('T')[0]), [wcMatches]);
+  const wcToday = useMemo(() => deriveToday(wcMatches || [], brasiliaTodayISO(nowMs)), [wcMatches, nowMs]);
   const wcBracket = useMemo(() => deriveBracket(wcMatches || []), [wcMatches]);
 
-  // TV-side refresh of ONLY pending/live matches via IA (future results). Never
-  // touches finished games. Gated by the card's autoRefresh toggle + a cache.
+  // TV-side IA refresh. Fast loop for the game(s) currently LIVE (by clock),
+  // plus a broad sweep of all pending games every WC_PENDING_CACHE_MS. Never
+  // rewrites a finished game. Gated by the card's autoRefresh toggle.
   useEffect(() => {
-    if (!isWC || !wcMatches) return;
-    if (currentMedia?.payload?.autoRefresh === false) return;
-    if (document.visibilityState !== 'visible') return;
-    const pending = wcMatches.filter(m => m.status !== 'finished');
-    if (pending.length === 0) return;
-    if (Date.now() - wcRefreshRef.current < WC_PENDING_CACHE_MS) return;
-    wcRefreshRef.current = Date.now();
-
+    if (!isWC) return;
     let cancelled = false;
-    (async () => {
-      await new Promise(r => setTimeout(r, Math.floor(Math.random() * 120000))); // jitter
+
+    const applyUpdates = async (list: WCMatch[]) => {
+      if (!list.length) return;
+      const updates = await fetchWcPendingUpdates(list);
+      for (const u of updates) {
+        const id = u.id || matchDocId(u);
+        const existing = (wcMatchesRef.current || []).find(m => m.id === id);
+        if (!existing || existing.status === 'finished') continue; // TV can't create or rewrite finished
+        await updateDoc(doc(db, 'wc_matches', id), {
+          homeScore: u.homeScore ?? null,
+          awayScore: u.awayScore ?? null,
+          homePens: u.homePens ?? null,
+          awayPens: u.awayPens ?? null,
+          status: u.status || 'scheduled',
+          time: u.time || existing.time || '',
+          updatedAt: serverTimestamp(),
+        }).catch(e => console.error('wc_matches update error:', e));
+      }
+    };
+
+    const tick = async () => {
       if (cancelled) return;
+      if (currentMedia?.payload?.autoRefresh === false) return;
+      if (document.visibilityState !== 'visible') return;
+      const all = wcMatchesRef.current || [];
+      const now = Date.now();
       try {
-        const updates = await fetchWcPendingUpdates(pending);
-        for (const u of updates) {
-          const id = u.id || matchDocId(u);
-          const existing = (wcMatches || []).find(m => m.id === id);
-          if (!existing || existing.status === 'finished') continue; // TV can't create or rewrite finished
-          await updateDoc(doc(db, 'wc_matches', id), {
-            homeScore: u.homeScore ?? null,
-            awayScore: u.awayScore ?? null,
-            homePens: u.homePens ?? null,
-            awayPens: u.awayPens ?? null,
-            status: u.status || 'scheduled',
-            time: u.time || existing.time || '',
-            updatedAt: serverTimestamp(),
-          }).catch(e => console.error('wc_matches update error:', e));
+        const live = all.filter(m => isLiveByClock(m, now));
+        if (live.length) await applyUpdates(live);              // fast: live game(s)
+        if (now - wcLastBroadRef.current > WC_PENDING_CACHE_MS) { // slow: all pending
+          wcLastBroadRef.current = now;
+          await applyUpdates(all.filter(m => m.status !== 'finished'));
         }
       } catch (e) {
-        console.error('World Cup pending refresh error:', e);
+        console.error('World Cup refresh error:', e);
       }
-    })();
-    return () => { cancelled = true; };
-  }, [isWC, wcMatches, currentMedia?.payload?.autoRefresh]);
+    };
+
+    const startId = setTimeout(tick, Math.floor(Math.random() * 15000)); // small startup jitter
+    const loopId = setInterval(tick, WC_LIVE_REFRESH_MS);
+    return () => { cancelled = true; clearTimeout(startId); clearInterval(loopId); };
+  }, [isWC, currentMedia?.payload?.autoRefresh]);
 
   // Smart Media: subscribe to the `sales` collection in real time (last 5)
   useEffect(() => {
@@ -2398,7 +2444,7 @@ export function Player() {
               const loading = wcMatches === null;
               return (
                 <div className="w-full h-full bg-gradient-to-br from-[#00401f] via-[#003d1a] to-[#0a0a0a] flex flex-col p-16 gap-10 relative overflow-hidden">
-                  <div className="absolute -top-1/4 right-0 w-[60vw] h-[60vw] bg-yellow-400/10 blur-[180px] rounded-full pointer-events-none" />
+                  <div className="absolute -top-1/4 right-0 w-[45vw] h-[45vw] bg-yellow-400/10 blur-[130px] rounded-full pointer-events-none" />
                   <div className="flex items-center gap-5 relative z-10">
                     <TeamFlag code="br" imgClass="w-20 h-14" emojiClass="text-7xl" />
                     <div>
@@ -2414,7 +2460,7 @@ export function Player() {
                       <div className="col-span-5 flex flex-col">
                         <h3 className="text-yellow-400 text-lg font-black uppercase tracking-[0.3em] mb-5">Próximo Jogo</h3>
                         {next ? (
-                          <div className="flex-1 bg-white/5 border border-white/10 rounded-[2.5rem] p-10 flex flex-col justify-center gap-8 backdrop-blur-sm">
+                          <div className="flex-1 bg-white/5 border border-white/10 rounded-[2.5rem] p-10 flex flex-col justify-center gap-8">
                             <div className="flex items-center justify-center gap-8">
                               <div className="flex flex-col items-center gap-3">
                                 <TeamFlag code="br" imgClass="w-24 h-16" emojiClass="text-7xl" />
@@ -2470,20 +2516,21 @@ export function Player() {
               );
             })()}
 
-            {/* World Cup — today's matches */}
+            {/* World Cup — today's matches (live by clock + goal animation) */}
             {currentMedia.type === 'WC_TODAY' && (() => {
               const matches = wcToday;
-              const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+              const today = new Date(nowMs).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo' });
               const loading = wcMatches === null;
               const showScore = (m: any) => m.homeScore != null && m.awayScore != null;
+              const liveNow = (m: any) => isLiveByClock(m, nowMs);
               const badge = (m: any) => {
-                if (m.status === 'live') return <span className="px-3 py-1 bg-rose-500 text-white rounded-full text-xs font-black uppercase tracking-widest animate-pulse">Ao Vivo</span>;
                 if (m.status === 'finished') return <span className="px-3 py-1 bg-zinc-700 text-zinc-300 rounded-full text-xs font-black uppercase tracking-widest">Encerrado</span>;
+                if (liveNow(m)) return <span className="px-3 py-1 bg-rose-500 text-white rounded-full text-xs font-black uppercase tracking-widest flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />Ao Vivo</span>;
                 return <span className="px-3 py-1 bg-white/10 text-white rounded-full text-xs font-black uppercase tracking-widest">{m.time || '—'}</span>;
               };
               return (
                 <div className="w-full h-full bg-gradient-to-br from-[#0a0f2c] via-[#0a0a1f] to-[#050505] flex flex-col p-16 gap-8 relative overflow-hidden">
-                  <div className="absolute -top-1/4 left-0 w-[60vw] h-[60vw] bg-adsplay/10 blur-[180px] rounded-full pointer-events-none" />
+                  <div className="absolute -top-1/4 left-0 w-[45vw] h-[45vw] bg-adsplay/10 blur-[140px] rounded-full pointer-events-none" />
                   <div className="flex items-center justify-between relative z-10">
                     <div className="flex items-center gap-5">
                       <div className="w-16 h-16 bg-adsplay/20 rounded-2xl flex items-center justify-center text-adsplay"><Calendar size={32} /></div>
@@ -2504,29 +2551,44 @@ export function Player() {
                     </div>
                   ) : (
                     <div className={`flex-1 grid gap-5 relative z-10 min-h-0 ${matches.length > 4 ? 'grid-cols-2 content-start' : 'grid-cols-1'}`}>
-                      {matches.slice(0, 8).map((m: any, i: number) => (
-                        <div key={i} className="bg-white/5 border border-white/10 rounded-[2rem] px-8 py-6 flex items-center gap-6 backdrop-blur-sm">
-                          <div className="flex-1 flex items-center justify-end gap-4 min-w-0">
-                            <span className="text-2xl font-black text-white truncate text-right">{(m.home || '').toUpperCase()}</span>
-                            <TeamFlag code={m.homeCode} emoji={m.homeFlag} imgClass="w-16 h-11" emojiClass="text-5xl" />
-                          </div>
-                          <div className="flex flex-col items-center gap-2 shrink-0 min-w-[130px]">
-                            {showScore(m) ? (
-                              <span className="text-4xl font-black text-white">{m.homeScore} <span className="text-zinc-600">×</span> {m.awayScore}</span>
-                            ) : (
-                              <span className="text-3xl font-black text-zinc-500">×</span>
+                      {matches.slice(0, 8).map((m: any) => {
+                        const isLive = liveNow(m);
+                        const scored = wcGoal && wcGoal.id === m.id;
+                        return (
+                          <div key={m.id} className={`relative rounded-[2rem] px-8 py-6 flex items-center gap-6 border transition-colors ${isLive ? 'bg-rose-950/40 border-rose-500/40' : 'bg-white/5 border-white/10'}`}>
+                            {scored && (
+                              <motion.div
+                                initial={{ opacity: 0, scale: 0.6, y: 6 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                transition={{ type: 'spring', stiffness: 400, damping: 18 }}
+                                className="absolute -top-3 left-1/2 -translate-x-1/2 z-20 px-4 py-1.5 bg-emerald-500 text-white rounded-full text-sm font-black uppercase tracking-widest shadow-lg shadow-emerald-500/30"
+                                style={{ willChange: 'transform, opacity' }}
+                              >
+                                ⚽ Gol!
+                              </motion.div>
                             )}
-                            {m.homePens != null && m.awayPens != null && (
-                              <span className="text-xs font-black text-yellow-400">({m.homePens}-{m.awayPens} nos pênaltis)</span>
-                            )}
-                            {badge(m)}
+                            <div className="flex-1 flex items-center justify-end gap-4 min-w-0">
+                              <span className={`text-2xl font-black truncate text-right ${scored && wcGoal!.side === 'home' ? 'text-emerald-400' : 'text-white'}`}>{(m.home || '').toUpperCase()}</span>
+                              <TeamFlag code={m.homeCode} emoji={m.homeFlag} imgClass="w-16 h-11" emojiClass="text-5xl" />
+                            </div>
+                            <div className="flex flex-col items-center gap-2 shrink-0 min-w-[130px]">
+                              {showScore(m) ? (
+                                <span className="text-4xl font-black text-white">{m.homeScore} <span className="text-zinc-600">×</span> {m.awayScore}</span>
+                              ) : (
+                                <span className="text-3xl font-black text-zinc-500">×</span>
+                              )}
+                              {m.homePens != null && m.awayPens != null && (
+                                <span className="text-xs font-black text-yellow-400">({m.homePens}-{m.awayPens} nos pênaltis)</span>
+                              )}
+                              {badge(m)}
+                            </div>
+                            <div className="flex-1 flex items-center gap-4 min-w-0">
+                              <TeamFlag code={m.awayCode} emoji={m.awayFlag} imgClass="w-16 h-11" emojiClass="text-5xl" />
+                              <span className={`text-2xl font-black truncate ${scored && wcGoal!.side === 'away' ? 'text-emerald-400' : 'text-white'}`}>{(m.away || '').toUpperCase()}</span>
+                            </div>
                           </div>
-                          <div className="flex-1 flex items-center gap-4 min-w-0">
-                            <TeamFlag code={m.awayCode} emoji={m.awayFlag} imgClass="w-16 h-11" emojiClass="text-5xl" />
-                            <span className="text-2xl font-black text-white truncate">{(m.away || '').toUpperCase()}</span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -2589,7 +2651,7 @@ export function Player() {
 
               return (
                 <div className="w-full h-full bg-gradient-to-br from-[#1a0a2e] via-[#0f0a1f] to-[#050505] flex flex-col p-10 gap-4 relative overflow-hidden">
-                  <div className="absolute -top-1/4 right-0 w-[60vw] h-[60vw] bg-yellow-400/10 blur-[180px] rounded-full pointer-events-none" />
+                  <div className="absolute -top-1/4 right-0 w-[45vw] h-[45vw] bg-yellow-400/10 blur-[130px] rounded-full pointer-events-none" />
                   <div className="text-center relative z-10">
                     <h2 className="text-5xl font-black text-white tracking-tighter leading-none">Caminho até a Final</h2>
                     <p className="text-yellow-400 font-black uppercase tracking-[0.3em] text-xs mt-2">Copa do Mundo FIFA 2026 · Mata-Mata</p>
