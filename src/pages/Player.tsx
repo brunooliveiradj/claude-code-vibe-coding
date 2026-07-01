@@ -532,7 +532,13 @@ export function Player() {
   const [searchParams] = useSearchParams();
   const urlDeviceId = searchParams.get('id');
   
-  const [isPaired, setIsPaired] = useState(false);
+  // Optimistically restore the paired state from localStorage so a reload or a
+  // transient device-doc read failure doesn't bounce a working TV back to the
+  // pairing/QR screen. The onSnapshot below corrects it if the device was
+  // genuinely unpaired.
+  const [isPaired, setIsPaired] = useState<boolean>(
+    () => !urlDeviceId && !!safeStorage.get('labs365_device_id') && safeStorage.get('labs365_is_paired') === 'true'
+  );
   const [pairCode, setPairCode] = useState('');
   const [deviceId, setDeviceId] = useState<string | null>(urlDeviceId || safeStorage.get('labs365_device_id'));
   const [deviceName, setDeviceName] = useState('');
@@ -901,9 +907,14 @@ export function Player() {
         const data = docSnap.data();
         setIsPaired(data.is_paired);
         setDeviceName(data.name);
+        if (!urlDeviceId) {
+          // Cache the paired state so a reload/transient blip keeps the TV playing
+          safeStorage.set('labs365_is_paired', data.is_paired ? 'true' : 'false');
+        }
       } else if (!urlDeviceId) {
         // Device removed from DB and not a forced URL preview
         safeStorage.remove('labs365_device_id');
+        safeStorage.remove('labs365_is_paired');
         setDeviceId(null);
         setIsPaired(false);
       }
