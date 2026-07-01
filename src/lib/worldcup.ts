@@ -133,8 +133,30 @@ Retorne APENAS um JSON no formato:
 Regras: ordene "rounds" da fase mais cedo para a Final. Inclua somente fases de mata-mata JÁ definidas (com confrontos conhecidos). Se o mata-mata ainda não começou, "rounds": []. Placar null se o jogo não terminou. Se foi decidido nos pênaltis, preencha homePens/awayPens (gols na disputa); senão null.`;
 };
 
+// Tolerant JSON parse: models grounded with Google Search often wrap the JSON
+// in ```json fences or add prose around it, so a raw JSON.parse throws.
+function parseLooseJson(text: string): any | null {
+  if (!text) return null;
+  let s = text.trim();
+  // strip a leading ```json / ``` fence and trailing ```
+  s = s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  try {
+    return JSON.parse(s);
+  } catch {
+    // last resort: grab the outermost {...} block
+    const first = s.indexOf('{');
+    const last = s.lastIndexOf('}');
+    if (first !== -1 && last > first) {
+      try { return JSON.parse(s.slice(first, last + 1)); } catch { /* fall through */ }
+    }
+  }
+  return null;
+}
+
 // Calls Gemini with Google Search grounding and returns the parsed JSON object
-// (or null). Callers persist it to Firestore. Mirrors fetchWeather's config.
+// (or null). Note: Google Search grounding is NOT compatible with
+// responseMimeType 'application/json' — passing both makes the API reject the
+// request. So we ground without a mime type and parse the text tolerantly.
 export async function fetchWorldCupData(type: WCType): Promise<any | null> {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
@@ -144,10 +166,8 @@ export async function fetchWorldCupData(type: WCType): Promise<any | null> {
     contents: buildPrompt(type, now),
     config: {
       tools: [{ googleSearch: {} }],
-      responseMimeType: 'application/json',
     },
   });
 
-  if (!response.text) return null;
-  return JSON.parse(response.text);
+  return parseLooseJson(response.text || '');
 }

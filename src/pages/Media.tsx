@@ -189,10 +189,12 @@ export function Media() {
           lastWCUpdate: Date.now(),
           autoRefresh: payload.autoRefresh !== false,
         });
+      } else {
+        setError('A IA não retornou dados válidos. Tente novamente ou preencha manualmente.');
       }
     } catch (err: any) {
       console.error('World Cup sync error:', err);
-      setError('Erro ao sincronizar dados da Copa. Tente novamente.');
+      setError(`Erro ao sincronizar dados da Copa: ${err?.message || 'tente novamente'}`);
     } finally {
       setIsSyncingWC(false);
     }
