@@ -285,8 +285,11 @@ export async function fetchWcPendingUpdates(pending: WCMatch[]): Promise<WCMatch
     .join('\n');
 
   const prompt = `Você é um assistente de dados esportivos. Use a BUSCA DO GOOGLE para consultar dados REAIS e em tempo real da Copa do Mundo FIFA 2026. Hoje é ${now} (horário de Brasília). NUNCA invente placares — se não tiver certeza, use null e status "scheduled".
-Preciso APENAS do estado atual destes jogos pendentes e dos próximos jogos JÁ definidos da Copa (não inclua jogos já encerrados de dias anteriores):
+Preciso de:
+1) o estado atual destes jogos pendentes:
 ${list || '(sem jogos pendentes conhecidos)'}
+2) TODOS os próximos confrontos JÁ definidos das próximas fases do mata-mata (ex: oitavas de final), MESMO que ainda não tenham data/horário — inclua obrigatoriamente o PRÓXIMO JOGO DA SELEÇÃO BRASILEIRA se já estiver definido (adversário conhecido). Para jogos ainda não realizados use placar null e status "scheduled".
+NÃO inclua jogos já encerrados de dias anteriores.
 Para cada seleção informe o código ISO 3166-1 alpha-2 do país em minúsculas (ex: Brasil="br", Japão="jp", Inglaterra="gb-eng").
 Retorne APENAS um JSON:
 { "matches": [ { "home": "Time", "homeCode": "iso", "away": "Time", "awayCode": "iso", "date": "AAAA-MM-DD", "time": "HH:MM", "stage": "Fase", "homeScore": number|null, "awayScore": number|null, "homePens": number|null, "awayPens": number|null, "status": "scheduled|live|finished" } ] }`;

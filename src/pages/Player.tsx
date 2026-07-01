@@ -48,7 +48,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { GoogleGenAI } from "@google/genai";
-import { deriveBrazil, deriveToday, deriveBracket, wcResultLetter, flagUrl, fetchWcPendingUpdates, matchDocId, WC_PENDING_CACHE_MS, WCMatch } from '../lib/worldcup';
+import { deriveBrazil, deriveToday, deriveBracket, wcResultLetter, flagUrl, fetchWcPendingUpdates, matchDocId, knockoutOrder, WC_PENDING_CACHE_MS, WCMatch } from '../lib/worldcup';
 import {
   collection,
   doc,
@@ -2538,7 +2538,7 @@ export function Player() {
               const rounds = wcBracket;
               const loading = wcMatches === null;
               const winner = (m: any) => {
-                if (m.homeScore == null || m.awayScore == null) return 0;
+                if (!m || m.homeScore == null || m.awayScore == null) return 0;
                 if (m.homeScore > m.awayScore) return 1;
                 if (m.awayScore > m.homeScore) return 2;
                 if (m.homePens != null && m.awayPens != null) {
@@ -2547,15 +2547,52 @@ export function Player() {
                 }
                 return 0;
               };
-              return (
-                <div className="w-full h-full bg-gradient-to-br from-[#1a0a2e] via-[#0f0a1f] to-[#050505] flex flex-col p-14 gap-8 relative overflow-hidden">
-                  <div className="absolute -top-1/4 right-0 w-[60vw] h-[60vw] bg-yellow-400/10 blur-[180px] rounded-full pointer-events-none" />
-                  <div className="flex items-center gap-5 relative z-10">
-                    <div className="w-16 h-16 bg-yellow-400/20 rounded-2xl flex items-center justify-center text-yellow-400"><Trophy size={32} /></div>
-                    <div>
-                      <h2 className="text-6xl font-black text-white tracking-tighter leading-none">Mata-Mata</h2>
-                      <p className="text-yellow-400 font-black uppercase tracking-[0.3em] text-sm mt-2">Copa do Mundo FIFA 2026</p>
+              const roundMatches = (order: number) => (rounds.find(r => knockoutOrder(r.name) === order)?.matches) || [];
+              const splitSides = (arr: any[], count: number): [any[], any[]] => {
+                const l = arr.slice(0, count); const r = arr.slice(count, count * 2);
+                while (l.length < count) l.push(null);
+                while (r.length < count) r.push(null);
+                return [l, r];
+              };
+              const [r32L, r32R] = splitSides(roundMatches(1), 8);
+              const [r16L, r16R] = splitSides(roundMatches(2), 4);
+              const [qfL, qfR] = splitSides(roundMatches(3), 2);
+              const [sfL, sfR] = splitSides(roundMatches(4), 1);
+              const finalM = roundMatches(6)[0] || null;
+              const thirdM = roundMatches(5)[0] || null;
+
+              const box = (m: any, key: number) => {
+                if (!m) return <div key={key} className="rounded-md border border-dashed border-white/10 min-h-[2.6rem]" />;
+                const w = winner(m);
+                return (
+                  <div key={key} className="rounded-md border border-white/10 bg-white/5 px-1.5 py-1 flex flex-col gap-0.5">
+                    <div className={`flex items-center gap-1.5 ${w === 2 ? 'opacity-40' : ''}`}>
+                      <TeamFlag code={m.homeCode} emoji={m.homeFlag} imgClass="w-7 h-5" emojiClass="text-sm" />
+                      <span className="text-[11px] font-black text-white ml-auto">{m.homeScore ?? ''}{m.homePens != null ? ` (${m.homePens})` : ''}</span>
                     </div>
+                    <div className={`flex items-center gap-1.5 ${w === 1 ? 'opacity-40' : ''}`}>
+                      <TeamFlag code={m.awayCode} emoji={m.awayFlag} imgClass="w-7 h-5" emojiClass="text-sm" />
+                      <span className="text-[11px] font-black text-white ml-auto">{m.awayScore ?? ''}{m.awayPens != null ? ` (${m.awayPens})` : ''}</span>
+                    </div>
+                  </div>
+                );
+              };
+
+              const col = (label: string, boxes: any[], k: string) => (
+                <div key={k} className="flex-1 flex flex-col min-w-0">
+                  <h4 className="text-[9px] font-black text-yellow-400/80 uppercase tracking-widest text-center mb-2 truncate">{label}</h4>
+                  <div className="flex-1 flex flex-col justify-around gap-1">
+                    {boxes.map((m, i) => box(m, i))}
+                  </div>
+                </div>
+              );
+
+              return (
+                <div className="w-full h-full bg-gradient-to-br from-[#1a0a2e] via-[#0f0a1f] to-[#050505] flex flex-col p-10 gap-4 relative overflow-hidden">
+                  <div className="absolute -top-1/4 right-0 w-[60vw] h-[60vw] bg-yellow-400/10 blur-[180px] rounded-full pointer-events-none" />
+                  <div className="text-center relative z-10">
+                    <h2 className="text-5xl font-black text-white tracking-tighter leading-none">Caminho até a Final</h2>
+                    <p className="text-yellow-400 font-black uppercase tracking-[0.3em] text-xs mt-2">Copa do Mundo FIFA 2026 · Mata-Mata</p>
                   </div>
 
                   {loading ? (
@@ -2566,36 +2603,25 @@ export function Player() {
                       <p className="text-3xl font-black">Mata-mata ainda não começou</p>
                     </div>
                   ) : (
-                    <div className="flex-1 flex gap-6 relative z-10 min-h-0 overflow-hidden">
-                      {rounds.slice(0, 5).map((round: any, ri: number) => (
-                        <div key={ri} className="flex-1 flex flex-col min-w-0">
-                          <h3 className="text-yellow-400 text-sm font-black uppercase tracking-[0.2em] mb-4 text-center truncate">{round.name}</h3>
-                          <div className="flex-1 flex flex-col justify-around gap-3">
-                            {(round.matches || []).slice(0, 8).map((m: any, mi: number) => {
-                              const w = winner(m);
-                              return (
-                                <div key={mi} className="bg-white/5 border border-white/10 rounded-2xl p-3 space-y-2">
-                                  <div className={`flex items-center justify-between gap-2 ${w === 1 ? 'opacity-100' : 'opacity-60'}`}>
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <TeamFlag code={m.homeCode} emoji={m.homeFlag} imgClass="w-6 h-4" emojiClass="text-xl" />
-                                      <span className="text-sm font-black text-white truncate">{m.home || '—'}</span>
-                                    </div>
-                                    <span className="text-lg font-black text-white shrink-0">{m.homeScore ?? ''}{m.homePens != null ? <span className="text-xs text-yellow-400"> ({m.homePens})</span> : ''}</span>
-                                  </div>
-                                  <div className="h-px bg-white/10" />
-                                  <div className={`flex items-center justify-between gap-2 ${w === 2 ? 'opacity-100' : 'opacity-60'}`}>
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <TeamFlag code={m.awayCode} emoji={m.awayFlag} imgClass="w-6 h-4" emojiClass="text-xl" />
-                                      <span className="text-sm font-black text-white truncate">{m.away || '—'}</span>
-                                    </div>
-                                    <span className="text-lg font-black text-white shrink-0">{m.awayScore ?? ''}{m.awayPens != null ? <span className="text-xs text-yellow-400"> ({m.awayPens})</span> : ''}</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                    <div className="flex-1 flex items-stretch gap-2 relative z-10 min-h-0">
+                      {col('2ª Fase', r32L, 'r32l')}
+                      {col('Oitavas', r16L, 'r16l')}
+                      {col('Quartas', qfL, 'qfl')}
+                      {col('Semifinais', sfL, 'sfl')}
+                      <div className="flex flex-col items-center justify-center gap-6 px-1 shrink-0" style={{ flexBasis: '150px' }}>
+                        <div className="w-full text-center">
+                          <h4 className="text-base font-black text-yellow-400 uppercase tracking-[0.2em] mb-2">Final</h4>
+                          {box(finalM, 999)}
                         </div>
-                      ))}
+                        <div className="w-full text-center">
+                          <h4 className="text-[8px] font-black text-zinc-500 uppercase tracking-widest mb-1">Disputa do 3º Lugar</h4>
+                          {box(thirdM, 998)}
+                        </div>
+                      </div>
+                      {col('Semifinais', sfR, 'sfr')}
+                      {col('Quartas', qfR, 'qfr')}
+                      {col('Oitavas', r16R, 'r16r')}
+                      {col('2ª Fase', r32R, 'r32r')}
                     </div>
                   )}
                 </div>
