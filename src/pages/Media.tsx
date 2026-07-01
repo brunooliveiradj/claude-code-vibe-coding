@@ -6,7 +6,7 @@ import { ref, uploadBytesResumable, getDownloadURL, getMetadata } from 'firebase
 import { collection, getDocs, addDoc, deleteDoc, doc, setDoc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { Company } from '../types';
 import { GoogleGenAI } from "@google/genai";
-import { parseBaseImport, fetchWcPendingUpdates, matchDocId, WCMatch } from '../lib/worldcup';
+import { parseBaseImport, parseLooseJson, fetchWcPendingUpdates, matchDocId, WCMatch } from '../lib/worldcup';
 import imageCompression from 'browser-image-compression';
 
 type MediaType = 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'WEATHER' | 'NORTH_STAR' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES' | 'WC_BRAZIL' | 'WC_TODAY' | 'WC_BRACKET';
@@ -205,8 +205,15 @@ export function Media() {
 
   // Import/upsert base results (played games are fixed data). Idempotent by id.
   const importWcBase = async () => {
+    if (!parseLooseJson(wcImportText)) {
+      setError('JSON malformado (erro de sintaxe). Verifique se colou o texto completo.');
+      return;
+    }
     const parsed = parseBaseImport(wcImportText);
-    if (parsed.length === 0) { setError('JSON inválido ou sem jogos reconhecidos.'); return; }
+    if (parsed.length === 0) {
+      setError('JSON lido, mas nenhum jogo reconhecido. Esperado um array de jogos (ex: "todos_os_jogos" / "jogos_recentes").');
+      return;
+    }
     setWcBusy('import');
     setError(null);
     try {
