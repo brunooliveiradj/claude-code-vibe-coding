@@ -1,42 +1,41 @@
-// World Cup mode — shared data layer.
+// World Cup mode — shared data layer (single source of truth).
 //
-// Three "smart media" card types feed off live FIFA World Cup 2026 data:
-//   WC_BRAZIL  — Brazil's journey (results so far) + next match
+// All matches live in a single Firestore collection `wc_matches`. The three
+// card types are just VIEWS over it:
+//   WC_BRAZIL  — Brazil's journey (finished games) + next match
 //   WC_TODAY   — today's matches
-//   WC_BRACKET — the knockout bracket
+//   WC_BRACKET — the knockout bracket (grouped by stage)
 //
-// Data is fetched via Gemini + Google Search (same pattern as WEATHER/NEWS)
-// and cached in the media payload on Firestore. It's HYBRID: an admin can
-// review/override the fetched data in the panel and freeze auto-refresh
-// (payload.autoRefresh === false) so their manual corrections stick.
+// A finished game never changes, so it's stored as fixed base data (imported
+// once). The IA is used ONLY to update/discover pending & future games — never
+// to rewrite a finished result. This keeps IA usage (and error surface) small.
 import { GoogleGenAI } from '@google/genai';
 
 export type WCType = 'WC_BRAZIL' | 'WC_TODAY' | 'WC_BRACKET';
+export type WCStatus = 'scheduled' | 'live' | 'finished';
 
 export interface WCMatch {
+  id?: string;
+  date?: string; // ISO "2026-06-29"
+  time?: string; // "17:00" (Brasília)
+  stage?: string; // "Fase de Grupos", "16 avos de final", ...
   home: string;
   away: string;
   homeCode?: string; // ISO 3166-1 alpha-2 (e.g. "br"); primary flag source
   awayCode?: string;
-  homeFlag?: string; // emoji fallback
-  awayFlag?: string;
   homeScore?: number | null;
   awayScore?: number | null;
   homePens?: number | null; // penalty shootout goals (knockout only)
   awayPens?: number | null;
-  date?: string;
-  time?: string;
-  stage?: string;
-  status?: 'scheduled' | 'live' | 'finished';
+  status?: WCStatus;
 }
 
 export interface WCBrazilResult {
   opponent: string;
   opponentCode?: string;
-  opponentFlag?: string;
   brScore: number;
   advScore: number;
-  brPens?: number | null; // penalty shootout goals (knockout only)
+  brPens?: number | null;
   advPens?: number | null;
   stage?: string;
   date?: string;
@@ -45,37 +44,62 @@ export interface WCBrazilResult {
 export interface WCBrazilNext {
   opponent: string;
   opponentCode?: string;
-  opponentFlag?: string;
   date?: string;
   time?: string;
   stage?: string;
-  venue?: string;
 }
-
-// Build a flag image URL from an ISO 3166-1 alpha-2 country code. Uses flagcdn
-// (standard country flag artwork, same source family as Wikipedia). UK nations
-// use codes like "gb-eng" / "gb-sct" / "gb-wls". Swap this base if ever blocked.
-export const flagUrl = (code?: string): string | null => {
-  if (!code) return null;
-  const c = code.trim().toLowerCase();
-  if (!c) return null;
-  return `https://flagcdn.com/w160/${c}.png`;
-};
 
 export interface WCBracketRound {
   name: string;
   matches: WCMatch[];
 }
 
-// How long a card's cached data stays fresh before the player refetches.
-export const WC_CACHE_MS: Record<WCType, number> = {
-  WC_TODAY: 15 * 60 * 1000, // 15 min — scores move during the day
-  WC_BRAZIL: 60 * 60 * 1000, // 1h — changes only after a Brazil match
-  WC_BRACKET: 60 * 60 * 1000, // 1h — changes only after knockout games
+// Cache window for the (optional) TV-side refresh of pending matches.
+export const WC_PENDING_CACHE_MS = 10 * 60 * 1000;
+
+// --- Flags ------------------------------------------------------------------
+
+// Flag image from an ISO 3166-1 alpha-2 code. Uses flagcdn (standard country
+// flag artwork). UK nations: gb-eng / gb-sct / gb-wls. Swap base if blocked.
+export const flagUrl = (code?: string): string | null => {
+  if (!code) return null;
+  const c = code.trim().toLowerCase();
+  return c ? `https://flagcdn.com/w160/${c}.png` : null;
 };
 
-// V (vitória) / E (empate) / D (derrota) from Brazil's point of view.
-// When regulation ends level and there was a shootout, the pens decide it.
+// --- Country name → ISO code (Portuguese names) -----------------------------
+
+const stripAccents = (s: string) =>
+  s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+const norm = (s: string) => stripAccents((s || '').toLowerCase()).trim();
+
+const COUNTRY_CODES: Record<string, string> = {
+  'brasil': 'br', 'argentina': 'ar', 'uruguai': 'uy', 'colombia': 'co', 'chile': 'cl',
+  'peru': 'pe', 'equador': 'ec', 'paraguai': 'py', 'bolivia': 'bo', 'venezuela': 've',
+  'estados unidos': 'us', 'mexico': 'mx', 'canada': 'ca', 'costa rica': 'cr', 'panama': 'pa',
+  'honduras': 'hn', 'jamaica': 'jm', 'franca': 'fr', 'alemanha': 'de', 'espanha': 'es',
+  'portugal': 'pt', 'italia': 'it', 'holanda': 'nl', 'paises baixos': 'nl', 'belgica': 'be',
+  'inglaterra': 'gb-eng', 'escocia': 'gb-sct', 'pais de gales': 'gb-wls', 'irlanda': 'ie',
+  'irlanda do norte': 'gb-nir', 'suica': 'ch', 'austria': 'at', 'suecia': 'se',
+  'noruega': 'no', 'dinamarca': 'dk', 'polonia': 'pl', 'croacia': 'hr', 'servia': 'rs',
+  'ucrania': 'ua', 'turquia': 'tr', 'grecia': 'gr', 'republica tcheca': 'cz', 'hungria': 'hu',
+  'romenia': 'ro', 'japao': 'jp', 'coreia do sul': 'kr', 'australia': 'au', 'ira': 'ir',
+  'arabia saudita': 'sa', 'catar': 'qa', 'qatar': 'qa', 'iraque': 'iq', 'jordania': 'jo',
+  'emirados arabes unidos': 'ae', 'uzbequistao': 'uz', 'marrocos': 'ma', 'senegal': 'sn',
+  'tunisia': 'tn', 'argelia': 'dz', 'egito': 'eg', 'gana': 'gh', 'nigeria': 'ng',
+  'camaroes': 'cm', 'costa do marfim': 'ci', 'africa do sul': 'za', 'mali': 'ml',
+  'cabo verde': 'cv', 'republica democratica do congo': 'cd', 'congo': 'cg',
+  'nova zelandia': 'nz', 'bosnia e herzegovina': 'ba', 'bosnia': 'ba',
+};
+
+export const codeForCountry = (name?: string): string | undefined => {
+  if (!name) return undefined;
+  return COUNTRY_CODES[norm(name)];
+};
+
+// --- Result letter (V/E/D from Brazil's view; pens decide a level game) ------
+
 export const wcResultLetter = (
   brScore: number,
   advScore: number,
@@ -91,83 +115,191 @@ export const wcResultLetter = (
   return 'E';
 };
 
-const buildPrompt = (type: WCType, now: string): string => {
-  const base = `Você é um assistente de dados esportivos. Use a BUSCA DO GOOGLE para consultar dados REAIS e em tempo real da Copa do Mundo FIFA 2026. Hoje é ${now} (horário de Brasília). NUNCA invente resultados, placares, datas ou confrontos — se não tiver certeza, deixe o campo vazio/null. Para CADA seleção, informe o código ISO 3166-1 alpha-2 do país em minúsculas (ex: Brasil="br", Japão="jp", Alemanha="de", Argentina="ar", EUA="us"). Para as seleções do Reino Unido use: Inglaterra="gb-eng", Escócia="gb-sct", País de Gales="gb-wls", Irlanda do Norte="gb-nir".`;
+// --- Match identity / normalization -----------------------------------------
 
-  if (type === 'WC_BRAZIL') {
-    return `${base}
-Traga a participação da SELEÇÃO BRASILEIRA MASCULINA nesta Copa.
-Retorne APENAS um JSON no formato:
-{
-  "results": [
-    { "opponent": "Nome do adversário", "opponentCode": "código ISO", "opponentFlag": "emoji da bandeira", "brScore": number, "advScore": number, "brPens": number|null, "advPens": number|null, "stage": "Fase (ex: Fase de Grupos — 1ª rodada)", "date": "DD/MM" }
-  ],
-  "nextMatch": { "opponent": "Nome", "opponentCode": "código ISO", "opponentFlag": "emoji", "date": "DD/MM/AAAA", "time": "HH:MM", "stage": "Fase", "venue": "Estádio, Cidade" }
-}
-Regras: "results" em ordem cronológica, SOMENTE jogos JÁ realizados do Brasil nesta Copa (placar do Brasil em brScore, do adversário em advScore). Se o jogo foi decidido nos pênaltis, preencha brPens/advPens (gols na disputa); senão null. Se o Brasil ainda não estreou, "results": []. Se não houver próximo jogo agendado (eliminado ou campeão), "nextMatch": null.`;
-  }
+const slug = (s: string) =>
+  norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
-  if (type === 'WC_TODAY') {
-    return `${base}
-Liste TODOS os jogos da Copa que acontecem HOJE.
-Retorne APENAS um JSON no formato:
-{
-  "matches": [
-    { "home": "Time", "homeCode": "código ISO", "homeFlag": "emoji", "away": "Time", "awayCode": "código ISO", "awayFlag": "emoji", "homeScore": number|null, "awayScore": number|null, "homePens": number|null, "awayPens": number|null, "time": "HH:MM", "stage": "Fase", "status": "scheduled|live|finished" }
-  ]
-}
-Regras: apenas jogos de HOJE, ordenados por horário. Placar null se ainda não começou. Se foi decidido nos pênaltis, preencha homePens/awayPens; senão null. "status": "live" se em andamento, "finished" se encerrado, "scheduled" se ainda vai começar. Se não houver jogos hoje, "matches": [].`;
-  }
+// Deterministic doc id so re-importing upserts instead of duplicating.
+export const matchDocId = (m: { date?: string; home: string; away: string }) =>
+  `${m.date || 'sd'}__${slug(m.home)}__${slug(m.away)}`;
 
-  // WC_BRACKET
-  return `${base}
-Traga o CHAVEAMENTO (mata-mata) atual da Copa.
-Retorne APENAS um JSON no formato:
-{
-  "rounds": [
-    { "name": "Nome da fase (ex: 16 avos de final)", "matches": [
-      { "home": "Time", "homeCode": "código ISO", "homeFlag": "emoji", "away": "Time", "awayCode": "código ISO", "awayFlag": "emoji", "homeScore": number|null, "awayScore": number|null, "homePens": number|null, "awayPens": number|null, "status": "scheduled|live|finished" }
-    ] }
-  ]
-}
-Regras: ordene "rounds" da fase mais cedo para a Final. Inclua somente fases de mata-mata JÁ definidas (com confrontos conhecidos). Se o mata-mata ainda não começou, "rounds": []. Placar null se o jogo não terminou. Se foi decidido nos pênaltis, preencha homePens/awayPens (gols na disputa); senão null.`;
+const normalizeStatus = (raw: any): WCStatus => {
+  const s = norm(String(raw || ''));
+  if (!s) return 'scheduled';
+  if (s.includes('encerr') || s.includes('final') || s.includes('finish')) return 'finished';
+  if (s.includes('andamento') || s.includes('live') || s.includes('vivo')) return 'live';
+  return 'scheduled';
 };
 
-// Tolerant JSON parse: models grounded with Google Search often wrap the JSON
-// in ```json fences or add prose around it, so a raw JSON.parse throws.
-function parseLooseJson(text: string): any | null {
+const extractTime = (raw: any): string => {
+  const m = String(raw || '').match(/(\d{1,2}:\d{2})/);
+  return m ? m[1] : '';
+};
+
+const numOrNull = (v: any): number | null =>
+  v === null || v === undefined || v === '' ? null : Number(v);
+
+export const isBrazil = (name?: string) => norm(name || '') === 'brasil';
+export const isKnockoutStage = (stage?: string) => !!stage && !norm(stage).includes('grupo');
+
+// Order of knockout rounds for the bracket columns.
+export const knockoutOrder = (stage?: string): number => {
+  const s = norm(stage || '');
+  if (s.includes('16 avos') || s.includes('32 avos') || s.includes('dezesseis')) return 1;
+  if (s.includes('oitavas')) return 2;
+  if (s.includes('quartas')) return 3;
+  if (s.includes('semi')) return 4;
+  if (s.includes('3') || s.includes('terceiro') || s.includes('disputa')) return 5;
+  if (s.includes('final')) return 6;
+  return 99;
+};
+
+// --- Import parser (accepts the "copa_do_mundo.jogos_recentes" shape) --------
+
+// Tolerant JSON parse (models grounded with Search wrap JSON in fences/prose).
+export function parseLooseJson(text: string): any | null {
   if (!text) return null;
   let s = text.trim();
-  // strip a leading ```json / ``` fence and trailing ```
   s = s.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
   try {
     return JSON.parse(s);
   } catch {
-    // last resort: grab the outermost {...} block
     const first = s.indexOf('{');
     const last = s.lastIndexOf('}');
     if (first !== -1 && last > first) {
       try { return JSON.parse(s.slice(first, last + 1)); } catch { /* fall through */ }
     }
+    const fa = s.indexOf('[');
+    const la = s.lastIndexOf(']');
+    if (fa !== -1 && la > fa) {
+      try { return JSON.parse(s.slice(fa, la + 1)); } catch { /* fall through */ }
+    }
   }
   return null;
 }
 
-// Calls Gemini with Google Search grounding and returns the parsed JSON object
-// (or null). Note: Google Search grounding is NOT compatible with
-// responseMimeType 'application/json' — passing both makes the API reject the
-// request. So we ground without a mime type and parse the text tolerantly.
-export async function fetchWorldCupData(type: WCType): Promise<any | null> {
+// Turn one raw item (PT-labelled or our own shape) into a normalized WCMatch.
+export function normalizeMatchItem(item: any): WCMatch | null {
+  if (!item) return null;
+  const home = item.home ?? item.equipe_casa ?? item.mandante;
+  const away = item.away ?? item.equipe_visitante ?? item.visitante;
+  if (!home || !away) return null;
+  const date = item.date ?? item.data ?? '';
+  const stage = item.stage ?? item.fase ?? '';
+  return {
+    date,
+    stage,
+    time: item.time ?? extractTime(item.status) ?? '',
+    home: String(home),
+    away: String(away),
+    homeCode: item.homeCode ?? codeForCountry(String(home)),
+    awayCode: item.awayCode ?? codeForCountry(String(away)),
+    homeScore: numOrNull(item.homeScore ?? item.placar_casa),
+    awayScore: numOrNull(item.awayScore ?? item.placar_visitante),
+    homePens: numOrNull(item.homePens ?? item.penaltis_casa),
+    awayPens: numOrNull(item.awayPens ?? item.penaltis_visitante),
+    status: normalizeStatus(item.status),
+    id: matchDocId({ date, home: String(home), away: String(away) }),
+  };
+}
+
+// Parse a pasted base dump into normalized matches (idempotent ids).
+export function parseBaseImport(text: string): WCMatch[] {
+  const data = parseLooseJson(text);
+  if (!data) return [];
+  const list =
+    data?.copa_do_mundo?.jogos_recentes ??
+    data?.jogos_recentes ??
+    data?.matches ??
+    (Array.isArray(data) ? data : []);
+  return (Array.isArray(list) ? list : [])
+    .map(normalizeMatchItem)
+    .filter((m): m is WCMatch => !!m);
+}
+
+// --- Views over the match set -----------------------------------------------
+
+const byDateAsc = (a: WCMatch, b: WCMatch) =>
+  `${a.date || ''} ${a.time || ''}`.localeCompare(`${b.date || ''} ${b.time || ''}`);
+
+export function deriveBrazil(matches: WCMatch[]): { results: WCBrazilResult[]; nextMatch: WCBrazilNext | null } {
+  const br = matches.filter(m => isBrazil(m.home) || isBrazil(m.away)).sort(byDateAsc);
+  const results: WCBrazilResult[] = br
+    .filter(m => m.status === 'finished')
+    .map(m => {
+      const brHome = isBrazil(m.home);
+      return {
+        opponent: brHome ? m.away : m.home,
+        opponentCode: brHome ? m.awayCode : m.homeCode,
+        brScore: Number(brHome ? m.homeScore : m.awayScore) || 0,
+        advScore: Number(brHome ? m.awayScore : m.homeScore) || 0,
+        brPens: brHome ? m.homePens : m.awayPens,
+        advPens: brHome ? m.awayPens : m.homePens,
+        stage: m.stage,
+        date: m.date,
+      };
+    });
+  const nx = br.find(m => m.status !== 'finished');
+  let nextMatch: WCBrazilNext | null = null;
+  if (nx) {
+    const brHome = isBrazil(nx.home);
+    nextMatch = {
+      opponent: brHome ? nx.away : nx.home,
+      opponentCode: brHome ? nx.awayCode : nx.homeCode,
+      date: nx.date,
+      time: nx.time,
+      stage: nx.stage,
+    };
+  }
+  return { results, nextMatch };
+}
+
+export function deriveToday(matches: WCMatch[], todayISO: string): WCMatch[] {
+  return matches.filter(m => m.date === todayISO).sort(byDateAsc);
+}
+
+export function deriveBracket(matches: WCMatch[]): WCBracketRound[] {
+  const ko = matches.filter(m => isKnockoutStage(m.stage));
+  const byStage: Record<string, WCMatch[]> = {};
+  ko.forEach(m => {
+    const key = m.stage || 'Mata-mata';
+    (byStage[key] = byStage[key] || []).push(m);
+  });
+  return Object.keys(byStage)
+    .sort((a, b) => knockoutOrder(a) - knockoutOrder(b))
+    .map(name => ({ name, matches: byStage[name].sort(byDateAsc) }));
+}
+
+// --- IA: update ONLY pending/future games (never rewrite finished) ----------
+
+// Asks Gemini (Google Search) for the current score/status of the pending
+// games plus any newly-defined upcoming fixtures. Returns normalized matches;
+// the caller upserts non-finished docs and adds new ones, never touching a
+// doc that is already finished.
+export async function fetchWcPendingUpdates(pending: WCMatch[]): Promise<WCMatch[]> {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  const list = pending
+    .map(m => `- ${m.home} x ${m.away}${m.date ? ` (${m.date})` : ''} [${m.stage || ''}]`)
+    .join('\n');
+
+  const prompt = `Você é um assistente de dados esportivos. Use a BUSCA DO GOOGLE para consultar dados REAIS e em tempo real da Copa do Mundo FIFA 2026. Hoje é ${now} (horário de Brasília). NUNCA invente placares — se não tiver certeza, use null e status "scheduled".
+Preciso APENAS do estado atual destes jogos pendentes e dos próximos jogos JÁ definidos da Copa (não inclua jogos já encerrados de dias anteriores):
+${list || '(sem jogos pendentes conhecidos)'}
+Para cada seleção informe o código ISO 3166-1 alpha-2 do país em minúsculas (ex: Brasil="br", Japão="jp", Inglaterra="gb-eng").
+Retorne APENAS um JSON:
+{ "matches": [ { "home": "Time", "homeCode": "iso", "away": "Time", "awayCode": "iso", "date": "AAAA-MM-DD", "time": "HH:MM", "stage": "Fase", "homeScore": number|null, "awayScore": number|null, "homePens": number|null, "awayPens": number|null, "status": "scheduled|live|finished" } ] }`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: buildPrompt(type, now),
-    config: {
-      tools: [{ googleSearch: {} }],
-    },
+    contents: prompt,
+    config: { tools: [{ googleSearch: {} }] },
   });
 
-  return parseLooseJson(response.text || '');
+  const data = parseLooseJson(response.text || '');
+  const arr = data?.matches ?? (Array.isArray(data) ? data : []);
+  return (Array.isArray(arr) ? arr : [])
+    .map(normalizeMatchItem)
+    .filter((m): m is WCMatch => !!m);
 }

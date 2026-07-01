@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence, animate, useMotionValue, useTransform } from 'framer-motion';
 import { 
   PieChart, 
@@ -48,7 +48,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { GoogleGenAI } from "@google/genai";
-import { fetchWorldCupData, WC_CACHE_MS, wcResultLetter, WCType, flagUrl } from '../lib/worldcup';
+import { deriveBrazil, deriveToday, deriveBracket, wcResultLetter, flagUrl, fetchWcPendingUpdates, matchDocId, WC_PENDING_CACHE_MS, WCMatch } from '../lib/worldcup';
 import {
   collection,
   doc,
@@ -655,8 +655,9 @@ export function Player() {
   }, [promptDismissed]);
   const [isFetchingNews, setIsFetchingNews] = useState(false);
   const [isFetchingWeather, setIsFetchingWeather] = useState(false);
-  const [isFetchingWC, setIsFetchingWC] = useState(false);
   const [newsItems, setNewsItems] = useState<any[]>([]);
+  const [wcMatches, setWcMatches] = useState<WCMatch[] | null>(null);
+  const wcRefreshRef = useRef(0);
 
   const shouldUpdateNews = (lastUpdateMs?: number) => {
     if (!lastUpdateMs) return true;
@@ -824,58 +825,6 @@ export function Player() {
       console.error('Error fetching weather:', err);
     } finally {
       setIsFetchingWeather(false);
-    }
-  };
-
-  // World Cup cards: refresh cached match data via Gemini + Google Search,
-  // then persist it to the media payload (same caching approach as weather).
-  // HYBRID: skip auto-refresh when an admin froze the card (autoRefresh === false).
-  const fetchWorldCup = async (media: Media) => {
-    const wcType = media.type as WCType;
-    if (wcType !== 'WC_BRAZIL' && wcType !== 'WC_TODAY' && wcType !== 'WC_BRACKET') return;
-
-    // Only update if visible to save quota
-    if (document.visibilityState !== 'visible') return;
-
-    // Admin override: manual data locked, don't overwrite it
-    if (media.payload?.autoRefresh === false) return;
-
-    const cacheDuration = WC_CACHE_MS[wcType];
-    const lastUpdate = media.payload?.lastWCUpdate;
-    if (lastUpdate && (Date.now() - lastUpdate < cacheDuration)) return;
-
-    if (isFetchingWC) return;
-    setIsFetchingWC(true);
-
-    // Jitter (0-2 min) so multiple TVs don't all refetch at the same second
-    const jitter = Math.floor(Math.random() * 120000);
-    await new Promise(resolve => setTimeout(resolve, jitter));
-
-    // Re-check after jitter in case another device already refreshed it
-    try {
-      const latestDoc = await getDoc(doc(db, 'media', media.id));
-      const latest = latestDoc.data()?.payload;
-      if (latest?.autoRefresh === false) { setIsFetchingWC(false); return; }
-      if (latest?.lastWCUpdate && (Date.now() - latest.lastWCUpdate < cacheDuration)) {
-        setIsFetchingWC(false);
-        return;
-      }
-    } catch (e) {
-      // fall through and try to fetch anyway
-    }
-
-    try {
-      const data = await fetchWorldCupData(wcType);
-      if (data) {
-        await updateDoc(doc(db, 'media', media.id), {
-          'payload': { ...media.payload, ...data, lastWCUpdate: Date.now() },
-          updatedAt: serverTimestamp()
-        }).catch(err => console.error('Error updating World Cup cache:', err));
-      }
-    } catch (err) {
-      console.error('Error fetching World Cup data:', err);
-    } finally {
-      setIsFetchingWC(false);
     }
   };
 
@@ -1087,13 +1036,63 @@ export function Player() {
       fetchNews(currentMedia);
     } else if (currentMedia?.type === 'WEATHER') {
       fetchWeather(currentMedia);
-    } else if (currentMedia?.type === 'WC_BRAZIL' || currentMedia?.type === 'WC_TODAY' || currentMedia?.type === 'WC_BRACKET') {
-      fetchWorldCup(currentMedia);
-      setNewsItems([]);
     } else {
       setNewsItems([]);
     }
   }, [currentMedia?.id]);
+
+  // World Cup: subscribe to the shared wc_matches collection (source of truth)
+  // whenever a WC card is on screen. The three cards are just views over it.
+  const isWC = currentMedia?.type === 'WC_BRAZIL' || currentMedia?.type === 'WC_TODAY' || currentMedia?.type === 'WC_BRACKET';
+  useEffect(() => {
+    if (!isWC) { setWcMatches(null); return; }
+    const unsub = onSnapshot(collection(db, 'wc_matches'), (snap) => {
+      setWcMatches(snap.docs.map(d => Object.assign({ id: d.id }, d.data()) as WCMatch));
+    }, (err) => console.error('wc_matches subscription error:', err));
+    return () => unsub();
+  }, [isWC]);
+
+  const wcBrazil = useMemo(() => deriveBrazil(wcMatches || []), [wcMatches]);
+  const wcToday = useMemo(() => deriveToday(wcMatches || [], new Date().toISOString().split('T')[0]), [wcMatches]);
+  const wcBracket = useMemo(() => deriveBracket(wcMatches || []), [wcMatches]);
+
+  // TV-side refresh of ONLY pending/live matches via IA (future results). Never
+  // touches finished games. Gated by the card's autoRefresh toggle + a cache.
+  useEffect(() => {
+    if (!isWC || !wcMatches) return;
+    if (currentMedia?.payload?.autoRefresh === false) return;
+    if (document.visibilityState !== 'visible') return;
+    const pending = wcMatches.filter(m => m.status !== 'finished');
+    if (pending.length === 0) return;
+    if (Date.now() - wcRefreshRef.current < WC_PENDING_CACHE_MS) return;
+    wcRefreshRef.current = Date.now();
+
+    let cancelled = false;
+    (async () => {
+      await new Promise(r => setTimeout(r, Math.floor(Math.random() * 120000))); // jitter
+      if (cancelled) return;
+      try {
+        const updates = await fetchWcPendingUpdates(pending);
+        for (const u of updates) {
+          const id = u.id || matchDocId(u);
+          const existing = (wcMatches || []).find(m => m.id === id);
+          if (!existing || existing.status === 'finished') continue; // TV can't create or rewrite finished
+          await updateDoc(doc(db, 'wc_matches', id), {
+            homeScore: u.homeScore ?? null,
+            awayScore: u.awayScore ?? null,
+            homePens: u.homePens ?? null,
+            awayPens: u.awayPens ?? null,
+            status: u.status || 'scheduled',
+            time: u.time || existing.time || '',
+            updatedAt: serverTimestamp(),
+          }).catch(e => console.error('wc_matches update error:', e));
+        }
+      } catch (e) {
+        console.error('World Cup pending refresh error:', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isWC, wcMatches, currentMedia?.payload?.autoRefresh]);
 
   // Smart Media: subscribe to the `sales` collection in real time (last 5)
   useEffect(() => {
@@ -2394,10 +2393,9 @@ export function Player() {
 
             {/* World Cup — Brazil's journey + next match */}
             {currentMedia.type === 'WC_BRAZIL' && (() => {
-              const p = currentMedia.payload || {};
-              const results = Array.isArray(p.results) ? p.results : [];
-              const next = p.nextMatch || null;
-              const loading = !p.lastWCUpdate && results.length === 0 && !next;
+              const results = wcBrazil.results;
+              const next = wcBrazil.nextMatch;
+              const loading = wcMatches === null;
               return (
                 <div className="w-full h-full bg-gradient-to-br from-[#00401f] via-[#003d1a] to-[#0a0a0a] flex flex-col p-16 gap-10 relative overflow-hidden">
                   <div className="absolute -top-1/4 right-0 w-[60vw] h-[60vw] bg-yellow-400/10 blur-[180px] rounded-full pointer-events-none" />
@@ -2474,10 +2472,9 @@ export function Player() {
 
             {/* World Cup — today's matches */}
             {currentMedia.type === 'WC_TODAY' && (() => {
-              const p = currentMedia.payload || {};
-              const matches = Array.isArray(p.matches) ? p.matches : [];
+              const matches = wcToday;
               const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
-              const loading = !p.lastWCUpdate && matches.length === 0;
+              const loading = wcMatches === null;
               const showScore = (m: any) => m.homeScore != null && m.awayScore != null;
               const badge = (m: any) => {
                 if (m.status === 'live') return <span className="px-3 py-1 bg-rose-500 text-white rounded-full text-xs font-black uppercase tracking-widest animate-pulse">Ao Vivo</span>;
@@ -2538,9 +2535,8 @@ export function Player() {
 
             {/* World Cup — knockout bracket */}
             {currentMedia.type === 'WC_BRACKET' && (() => {
-              const p = currentMedia.payload || {};
-              const rounds = Array.isArray(p.rounds) ? p.rounds : [];
-              const loading = !p.lastWCUpdate && rounds.length === 0;
+              const rounds = wcBracket;
+              const loading = wcMatches === null;
               const winner = (m: any) => {
                 if (m.homeScore == null || m.awayScore == null) return 0;
                 if (m.homeScore > m.awayScore) return 1;

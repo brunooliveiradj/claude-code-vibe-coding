@@ -173,5 +173,20 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false;
     }
+
+    // World Cup — single source of truth for matches. Content managers seed and
+    // edit (import base results, corrections). The public player may READ, and
+    // may UPDATE only the live fields of a NON-finished match (so the TV can
+    // reflect live scores) — it can never rewrite a finished result, change the
+    // teams/date, or create/delete matches.
+    match /wc_matches/{matchId} {
+      allow read: if true;
+      allow create: if isContentManager();
+      allow update: if isContentManager() ||
+                       (resource.data.status != 'finished' &&
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['homeScore', 'awayScore', 'homePens', 'awayPens', 'status', 'time', 'updatedAt']));
+      allow delete: if isContentManager();
+    }
   }
 }
