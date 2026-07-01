@@ -1,25 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Monitor, Plus, Search, MoreVertical, RefreshCw, Tv, Trash2, ExternalLink, Copy, QrCode, X, CheckCircle2, Edit2 } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
+import { Plus, Search, RefreshCw, Tv, Trash2, ExternalLink, Copy, Edit2 } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 
 interface Device {
   id: string;
   name: string;
-  pair_code: string;
-  is_paired: boolean;
   last_ping: any;
 }
+
+// A device is considered "online" if it pinged within the last 2 minutes.
+const ONLINE_WINDOW_MS = 2 * 60 * 1000;
+const isDeviceOnline = (lastPing: any) => {
+  const ms = lastPing?.toMillis?.();
+  return !!ms && Date.now() - ms < ONLINE_WINDOW_MS;
+};
 
 export function Devices() {
   const { isAdmin } = useAuth();
   const [devices, setDevices] = useState<Device[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newDeviceName, setNewDeviceName] = useState('');
-  const [pairCode, setPairCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -41,23 +44,27 @@ export function Devices() {
     fetchDevices();
   }, []);
 
-  const handlePair = async (e: React.FormEvent) => {
+  const handleAddDevice = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      // In a real app, we'd check if the code exists and is pending.
-      // For this demo, we'll just create a new device with that code.
-      await addDoc(collection(db, 'devices'), {
+      // No pairing: registering a device just creates a named monitor. Its link
+      // (/player?id=<id>) can be opened on the TV; the player pings last_ping so
+      // this page can show which screens are online.
+      const ref = await addDoc(collection(db, 'devices'), {
         name: newDeviceName,
-        pair_code: pairCode,
+        pair_code: '0000',
         is_paired: true,
         last_ping: serverTimestamp(),
         createdAt: serverTimestamp()
       });
-      
+
+      const link = `${window.location.origin}/player?id=${ref.id}`;
+      navigator.clipboard?.writeText(link).catch(() => {});
       setIsModalOpen(false);
       setNewDeviceName('');
-      setPairCode('');
+      setToast('Dispositivo criado! Link copiado.');
+      setTimeout(() => setToast(null), 3000);
       fetchDevices();
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'devices');
@@ -136,7 +143,7 @@ export function Devices() {
       <div className="bg-indigo-50 border border-indigo-100 p-8 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-8">
         <div className="space-y-2 text-center md:text-left">
           <h3 className="text-xl font-black text-indigo-900 uppercase tracking-tight">Link Único de Visualização</h3>
-          <p className="text-indigo-700/70 text-sm font-medium">Use este link em qualquer Smart TV ou navegador para iniciar o player.</p>
+          <p className="text-indigo-700/70 text-sm font-medium">Abra este link em qualquer Smart TV ou navegador — ele toca a playlist atual automaticamente, sem pareamento.</p>
         </div>
         <div className="flex items-center gap-4 bg-white p-2 pl-6 rounded-2xl border border-indigo-200 w-full md:w-auto">
           <code className="text-indigo-600 font-bold text-sm truncate max-w-[200px] md:max-w-xs">
@@ -204,9 +211,9 @@ export function Devices() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${device.is_paired ? 'bg-adsplay' : 'bg-rose-500'}`} />
+                      <div className={`w-2 h-2 rounded-full ${isDeviceOnline(device.last_ping) ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-300'}`} />
                       <span className="text-sm font-medium text-zinc-700">
-                        {device.is_paired ? 'Online' : 'Offline'}
+                        {isDeviceOnline(device.last_ping) ? 'Online' : 'Offline'}
                       </span>
                     </div>
                   </td>
@@ -369,52 +376,40 @@ export function Devices() {
           >
             <div className="p-8 space-y-6">
               <div className="space-y-2">
-                <h3 className="text-2xl font-bold tracking-tight">Vincular Nova TV</h3>
+                <h3 className="text-2xl font-bold tracking-tight">Novo Dispositivo</h3>
                 <p className="text-zinc-500 text-sm">
-                  1. Abra o <a href="/player" target="_blank" className="text-indigo-600 font-bold hover:underline">Link do Player</a> em sua TV ou navegador.<br />
-                  2. Insira o código de 4 dígitos que aparecerá na tela.
+                  Dê um nome ao local. Ao salvar, o link exclusivo do player é copiado —
+                  abra-o na TV e ela já começa a reproduzir a playlist atual.
                 </p>
               </div>
 
-              <form onSubmit={handlePair} className="space-y-4">
+              <form onSubmit={handleAddDevice} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Nome do Local</label>
-                  <input 
+                  <input
                     required
-                    type="text" 
-                    placeholder="Ex: Recepção" 
+                    type="text"
+                    placeholder="Ex: Recepção"
                     value={newDeviceName}
                     onChange={(e) => setNewDeviceName(e.target.value)}
                     className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Código de 4 Dígitos</label>
-                  <input 
-                    required
-                    type="text" 
-                    maxLength={4}
-                    placeholder="0000" 
-                    value={pairCode}
-                    onChange={(e) => setPairCode(e.target.value)}
-                    className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl text-center text-3xl font-black tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
-                  />
-                </div>
-                
+
                 <div className="pt-4 flex gap-3">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
                     className="flex-1 px-4 py-3 rounded-2xl font-bold text-zinc-500 hover:bg-zinc-100 transition-colors"
                   >
                     Cancelar
                   </button>
-                  <button 
+                  <button
                     type="submit"
                     disabled={loading}
                     className="flex-1 px-4 py-3 bg-zinc-900 text-white rounded-2xl font-bold hover:bg-zinc-800 transition-colors shadow-lg disabled:opacity-50"
                   >
-                    {loading ? 'Vinculando...' : 'Vincular'}
+                    {loading ? 'Criando...' : 'Criar Dispositivo'}
                   </button>
                 </div>
               </form>

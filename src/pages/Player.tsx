@@ -18,9 +18,8 @@ import {
   Wifi, 
   WifiOff, 
   Loader2, 
-  Play, 
+  Play,
   AlertCircle,
-  QrCode,
   ArrowLeft,
   Monitor,
   Maximize,
@@ -44,7 +43,6 @@ import {
   CloudFog,
   Globe
 } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
@@ -532,15 +530,9 @@ export function Player() {
   const [searchParams] = useSearchParams();
   const urlDeviceId = searchParams.get('id');
   
-  // Optimistically restore the paired state from localStorage so a reload or a
-  // transient device-doc read failure doesn't bounce a working TV back to the
-  // pairing/QR screen. The onSnapshot below corrects it if the device was
-  // genuinely unpaired.
-  const [isPaired, setIsPaired] = useState<boolean>(
-    () => !urlDeviceId && !!safeStorage.get('labs365_device_id') && safeStorage.get('labs365_is_paired') === 'true'
-  );
-  const [pairCode, setPairCode] = useState('');
-  const [deviceId, setDeviceId] = useState<string | null>(urlDeviceId || safeStorage.get('labs365_device_id'));
+  // No pairing: the player always plays the current playlist. An explicit
+  // ?id=<deviceId> is optional and used only for monitoring (name + last_ping).
+  const deviceId = urlDeviceId;
   const [deviceName, setDeviceName] = useState('');
   const [status, setStatus] = useState<'IDLE' | 'PLAYING' | 'ERROR'>('IDLE');
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
@@ -640,7 +632,6 @@ export function Player() {
       clearTimeout(timer);
     };
   }, [promptDismissed]);
-  const [error, setError] = useState<string | null>(null);
   const [isFetchingNews, setIsFetchingNews] = useState(false);
   const [isFetchingWeather, setIsFetchingWeather] = useState(false);
   const [newsItems, setNewsItems] = useState<any[]>([]);
@@ -892,42 +883,26 @@ export function Player() {
     };
   }, [status]);
 
-  // 2. Pairing Logic & Device Sync
+  // 2. Device monitoring (optional — only when an explicit ?id= is provided).
+  // No pairing: this just reflects the device name and pings last_ping so the
+  // admin "Dispositivos" page can show which TVs are online.
   useEffect(() => {
     if (!deviceId) {
-      // Generate a new temporary pair code
-      const code = Math.floor(1000 + Math.random() * 9000).toString();
-      setPairCode(code);
+      setDeviceName('Player');
       return;
     }
 
-    // Listen to device document
     const unsubscribe = onSnapshot(doc(db, 'devices', deviceId), (docSnap) => {
       if (docSnap.exists()) {
-        const data = docSnap.data();
-        setIsPaired(data.is_paired);
-        setDeviceName(data.name);
-        if (!urlDeviceId) {
-          // Cache the paired state so a reload/transient blip keeps the TV playing
-          safeStorage.set('labs365_is_paired', data.is_paired ? 'true' : 'false');
-        }
-      } else if (!urlDeviceId) {
-        // Device removed from DB and not a forced URL preview
-        safeStorage.remove('labs365_device_id');
-        safeStorage.remove('labs365_is_paired');
-        setDeviceId(null);
-        setIsPaired(false);
+        setDeviceName(docSnap.data().name || 'Player');
       }
     }, (err) => {
-      console.error('Firestore error:', err);
-      if (urlDeviceId) {
-        setError('Dispositivo não encontrado ou sem permissão.');
-      }
+      console.error('Device read error:', err);
     });
 
     // Ping interval (every 30 seconds to save writes)
     const pingInterval = setInterval(() => {
-      if (deviceId && !urlDeviceId && isOnline) {
+      if (isOnline) {
         updateDoc(doc(db, 'devices', deviceId), {
           last_ping: serverTimestamp()
         }).catch(err => console.error('Ping error:', err));
@@ -938,79 +913,78 @@ export function Player() {
       unsubscribe();
       clearInterval(pingInterval);
     };
-  }, [deviceId, urlDeviceId, isOnline]);
+  }, [deviceId, isOnline]);
 
-  // 3. Polling for Pairing (if not paired)
+  // 3. Fetch the current playlist — always. Priority: playlist scheduled for
+  // today; fallback: the most recently created playlist so the TV never sits
+  // idle when content exists.
   useEffect(() => {
-    if (isPaired || deviceId) return;
-
-    const interval = setInterval(async () => {
-      try {
-        const q = query(collection(db, 'devices'), where('pair_code', '==', pairCode), where('is_paired', '==', true));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          const doc = querySnapshot.docs[0];
-          const id = doc.id;
-          setDeviceId(id);
-          safeStorage.set('labs365_device_id', id);
-        }
-      } catch (err) {
-        console.error('Pairing poll error:', err);
-      }
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [isPaired, deviceId, pairCode]);
-
-  // 4. Fetch Schedule & Playlist
-  useEffect(() => {
-    // Load schedule if paired OR if no device ID is provided (Public Mode)
-    if (!isPaired && deviceId) return;
-
     const today = new Date().toISOString().split('T')[0];
     let playlistUnsub: (() => void) | null = null;
     let lastPlaylistId: string | null = null;
 
-    // Listen to schedule for today
-    const scheduleUnsub = onSnapshot(doc(db, 'schedule', today), (docSnap) => {
-      // Cancel the previous playlist subscription whenever the schedule changes
+    const subscribeToPlaylist = (playlistId: string) => {
       if (playlistUnsub) {
         playlistUnsub();
         playlistUnsub = null;
       }
-
-      if (docSnap.exists()) {
-        const playlistId = docSnap.data().playlistId;
-        if (playlistId) {
-          // Subscribe to the playlist document so content changes propagate in real time
-          playlistUnsub = onSnapshot(doc(db, 'playlists', playlistId), (plSnap) => {
-            if (plSnap.exists()) {
-              const newPlaylist = Object.assign({ id: plSnap.id }, plSnap.data()) as Playlist;
-              const isNewPlaylist = lastPlaylistId !== newPlaylist.id;
-              lastPlaylistId = newPlaylist.id;
-              if (isNewPlaylist) {
-                setCurrentIndex(0);
-              } else {
-                // Same playlist, items changed: keep position but clamp if needed
-                setCurrentIndex(prev => Math.min(prev, Math.max(0, newPlaylist.items.length - 1)));
-              }
-              setPlaylist(newPlaylist);
-              setStatus('PLAYING');
-            } else {
-              setPlaylist(null);
-              setStatus('IDLE');
-            }
-          }, (err) => {
-            handleFirestoreError(err, OperationType.GET, `playlists/${playlistId}`);
-          });
-          return;
+      playlistUnsub = onSnapshot(doc(db, 'playlists', playlistId), (plSnap) => {
+        if (plSnap.exists()) {
+          const newPlaylist = Object.assign({ id: plSnap.id }, plSnap.data()) as Playlist;
+          const isNewPlaylist = lastPlaylistId !== newPlaylist.id;
+          lastPlaylistId = newPlaylist.id;
+          if (isNewPlaylist) {
+            setCurrentIndex(0);
+          } else {
+            // Same playlist, items changed: keep position but clamp if needed
+            setCurrentIndex(prev => Math.min(prev, Math.max(0, newPlaylist.items.length - 1)));
+          }
+          setPlaylist(newPlaylist);
+          setStatus('PLAYING');
+        } else {
+          lastPlaylistId = null;
+          setPlaylist(null);
+          setStatus('IDLE');
         }
-      }
+      }, (err) => {
+        handleFirestoreError(err, OperationType.GET, `playlists/${playlistId}`);
+      });
+    };
 
-      // No schedule or playlist found
+    const clearPlaylist = () => {
+      if (playlistUnsub) {
+        playlistUnsub();
+        playlistUnsub = null;
+      }
       lastPlaylistId = null;
       setPlaylist(null);
       setStatus('IDLE');
+    };
+
+    const loadFallback = async () => {
+      // Nothing scheduled for today: play the most recently created playlist.
+      try {
+        const snap = await getDocs(collection(db, 'playlists'));
+        if (!snap.empty) {
+          const docs = snap.docs.slice().sort(
+            (a, b) => (b.data().createdAt?.toMillis?.() || 0) - (a.data().createdAt?.toMillis?.() || 0)
+          );
+          subscribeToPlaylist(docs[0].id);
+          return;
+        }
+      } catch (err) {
+        console.error('Fallback playlist error:', err);
+      }
+      clearPlaylist();
+    };
+
+    const scheduleUnsub = onSnapshot(doc(db, 'schedule', today), (docSnap) => {
+      const playlistId = docSnap.exists() ? docSnap.data().playlistId : null;
+      if (playlistId) {
+        subscribeToPlaylist(playlistId);
+      } else {
+        loadFallback();
+      }
     }, (err) => {
       handleFirestoreError(err, OperationType.GET, `schedule/${today}`);
     });
@@ -1019,7 +993,7 @@ export function Player() {
       scheduleUnsub();
       if (playlistUnsub) playlistUnsub();
     };
-  }, [isPaired]);
+  }, []);
 
   // 5. Playback Loop
   const handleNext = React.useCallback(() => {
@@ -1175,71 +1149,6 @@ export function Player() {
     if (c.includes('neblina') || c.includes('fog')) return <CloudFog size={28} />;
     return <CloudSun size={28} />;
   };
-
-  if (!isPaired && status !== 'PLAYING') {
-    return (
-      <div className="fixed inset-0 bg-zinc-950 flex items-center justify-center p-8">
-        <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-          <div className="space-y-8">
-            <div className="flex items-center gap-4 text-adsplay">
-              <Tv size={48} />
-              <div className="h-8 w-px bg-zinc-800" />
-              <div className="flex flex-col">
-                <span className="text-sm font-black uppercase tracking-[0.3em]">Adsplay TV</span>
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Soluções para ir além</span>
-              </div>
-            </div>
-            
-            <div className="space-y-4">
-              <h1 className="text-6xl font-black text-white leading-tight tracking-tighter">
-                Vincular <br /> esta TV
-              </h1>
-              <p className="text-zinc-400 text-xl leading-relaxed">
-                Abra o painel administrativo no seu celular ou computador e insira o código ao lado.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-6 p-6 bg-zinc-900/50 rounded-3xl border border-zinc-800">
-              <div className={`w-3 h-3 rounded-full animate-pulse ${isOnline ? 'bg-adsplay' : 'bg-rose-500'}`} />
-              <div className="flex-1">
-                <p className="text-white font-bold">{isOnline ? 'Conectado à Internet' : 'Sem Conexão'}</p>
-                <p className="text-zinc-500 text-sm">{isOnline ? 'Aguardando pareamento...' : 'Verifique sua rede'}</p>
-              </div>
-              {isOnline && <Loader2 className="text-zinc-700 animate-spin" size={24} />}
-            </div>
-          </div>
-
-          <div className="flex flex-col items-center gap-8">
-            <div className="bg-white p-12 rounded-[3rem] shadow-2xl shadow-adsplay/10 flex flex-col items-center gap-6">
-              <div className="text-center space-y-2">
-                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">Código de Acesso</p>
-                <div className="text-8xl font-black text-zinc-950 tracking-tighter">
-                  {pairCode}
-                </div>
-              </div>
-              
-              <div className="w-full h-px bg-zinc-100" />
-              
-              <div className="flex flex-col items-center gap-4">
-                <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
-                  <QRCodeSVG 
-                    value={window.location.origin} 
-                    size={160}
-                    level="H"
-                    includeMargin={false}
-                  />
-                </div>
-                <div className="flex items-center gap-2 text-zinc-400">
-                  <QrCode size={16} />
-                  <span className="text-[10px] font-bold uppercase tracking-widest">Escanear para Painel</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="fixed inset-0 bg-black overflow-hidden cursor-none group">

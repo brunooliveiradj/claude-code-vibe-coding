@@ -15,9 +15,15 @@ interface Stats {
 interface Device {
   id: string;
   name: string;
-  is_paired: boolean;
   last_ping: any;
 }
+
+// A TV is "online" if it pinged within the last 2 minutes (no pairing concept).
+const ONLINE_WINDOW_MS = 2 * 60 * 1000;
+const isDeviceOnline = (lastPing: any) => {
+  const ms = lastPing?.toMillis?.();
+  return !!ms && Date.now() - ms < ONLINE_WINDOW_MS;
+};
 
 export function Dashboard() {
   const { isAdmin, isContentManager, profile } = useAuth();
@@ -36,7 +42,7 @@ export function Dashboard() {
       setStatsData({
         devices: devicesSnap.size,
         playlists: playlistsSnap.size,
-        online: devicesList.filter(d => d.is_paired).length
+        online: devicesList.filter(d => isDeviceOnline(d.last_ping)).length
       });
 
       setDevices(devicesList.slice(0, 5));
@@ -97,10 +103,10 @@ export function Dashboard() {
               {devices.map((device) => (
                 <div key={device.id} className="p-4 flex items-center justify-between hover:bg-zinc-50 transition-colors cursor-pointer">
                   <div className="flex items-center gap-4">
-                    <div className={`w-2 h-2 rounded-full ${device.is_paired ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                    <div className={`w-2 h-2 rounded-full ${isDeviceOnline(device.last_ping) ? 'bg-emerald-500' : 'bg-zinc-300'}`} />
                     <div>
                       <p className="font-semibold text-sm">{device.name}</p>
-                      <p className="text-xs text-zinc-500">{device.is_paired ? 'Pareado' : 'Aguardando Pareamento'}</p>
+                      <p className="text-xs text-zinc-500">{isDeviceOnline(device.last_ping) ? 'Online' : 'Offline'}</p>
                     </div>
                   </div>
                   <div className="text-right">
