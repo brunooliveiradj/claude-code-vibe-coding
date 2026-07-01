@@ -44,6 +44,7 @@ export function Media() {
   const [wcMatches, setWcMatches] = useState<WCMatch[]>([]);
   const [wcImportText, setWcImportText] = useState('');
   const [wcBusy, setWcBusy] = useState<string | null>(null); // 'load' | 'import' | 'sync' | 'save'
+  const [wcMsg, setWcMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [libraryItems, setLibraryItems] = useState<any[]>([]);
   const [libraryTarget, setLibraryTarget] = useState<'single' | 'carousel' | 'playlist_logo'>('single');
@@ -205,23 +206,25 @@ export function Media() {
 
   // Import/upsert base results (played games are fixed data). Idempotent by id.
   const importWcBase = async () => {
+    setWcMsg(null);
     if (!parseLooseJson(wcImportText)) {
-      setError('JSON malformado (erro de sintaxe). Verifique se colou o texto completo.');
+      setWcMsg({ ok: false, text: 'JSON malformado (erro de sintaxe). Verifique se colou o texto completo.' });
       return;
     }
     const parsed = parseBaseImport(wcImportText);
     if (parsed.length === 0) {
-      setError('JSON lido, mas nenhum jogo reconhecido. Esperado um array de jogos (ex: "todos_os_jogos" / "jogos_recentes").');
+      setWcMsg({ ok: false, text: 'JSON lido, mas nenhum jogo reconhecido. O array precisa ter jogos com "equipe_casa"/"equipe_visitante".' });
       return;
     }
     setWcBusy('import');
-    setError(null);
     try {
       await Promise.all(parsed.map(m => setDoc(doc(db, 'wc_matches', m.id!), wcDocData(m), { merge: true })));
       setWcImportText('');
       await loadWcMatches();
-    } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, 'wc_matches');
+      setWcMsg({ ok: true, text: `✅ ${parsed.length} jogo(s) importado(s) com sucesso.` });
+    } catch (e: any) {
+      console.error('WC import error:', e);
+      setWcMsg({ ok: false, text: `Erro ao gravar no banco: ${e?.message || 'verifique permissões (regras do Firestore)'}` });
     } finally {
       setWcBusy(null);
     }
@@ -231,14 +234,16 @@ export function Media() {
   const syncWcPending = async () => {
     const pending = wcMatches.filter(m => m.status !== 'finished');
     setWcBusy('sync');
-    setError(null);
+    setWcMsg(null);
     try {
       const updates = await fetchWcPendingUpdates(pending);
-      if (updates.length === 0) { setError('A IA não retornou atualizações. Tente novamente.'); }
+      if (updates.length === 0) { setWcMsg({ ok: false, text: 'A IA não retornou atualizações. Tente novamente.' }); }
+      let applied = 0;
       await Promise.all(updates.map(u => {
         const id = u.id || matchDocId(u);
         const existing = wcMatches.find(m => m.id === id);
         if (existing && existing.status === 'finished') return Promise.resolve(); // never rewrite finished
+        applied++;
         return setDoc(doc(db, 'wc_matches', id), wcDocData({
           ...u,
           date: u.date || existing?.date, time: u.time || existing?.time, stage: u.stage || existing?.stage,
@@ -246,9 +251,10 @@ export function Media() {
         }), { merge: true });
       }));
       await loadWcMatches();
+      if (updates.length > 0) setWcMsg({ ok: true, text: `✅ ${applied} jogo(s) pendente(s) atualizado(s) pela IA.` });
     } catch (e: any) {
       console.error('WC pending sync error:', e);
-      setError(`Erro ao sincronizar pendentes: ${e?.message || 'tente novamente'}`);
+      setWcMsg({ ok: false, text: `Erro ao sincronizar pendentes: ${e?.message || 'tente novamente'}` });
     } finally {
       setWcBusy(null);
     }
@@ -2013,12 +2019,13 @@ export function Media() {
                         <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Importar base (colar JSON)</label>
                         <textarea
                           value={wcImportText}
-                          onChange={(e) => setWcImportText(e.target.value)}
-                          placeholder='Cole o JSON dos jogos aqui (formato "copa_do_mundo.jogos_recentes"). Jogos encerrados viram base fixa.'
-                          className="w-full h-24 px-3 py-2 bg-white border border-zinc-200 rounded-xl text-[11px] font-mono focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
+                          onChange={(e) => { setWcImportText(e.target.value); if (wcMsg) setWcMsg(null); }}
+                          placeholder={'Cole o JSON dos jogos aqui. Aceita { "copa_do_mundo": { "todos_os_jogos": [...] } } ou um array de jogos. Jogos encerrados viram base fixa.'}
+                          className="w-full h-40 px-3 py-2 bg-white border border-zinc-200 rounded-xl text-[11px] font-mono focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all resize-y"
                         />
                         <div className="flex flex-wrap gap-2">
-                          <button type="button" disabled={!!wcBusy || !wcImportText.trim()} onClick={importWcBase} className="px-4 py-2 bg-zinc-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition-all disabled:opacity-50">
+                          <button type="button" disabled={!!wcBusy || !wcImportText.trim()} onClick={importWcBase} className="px-4 py-2 bg-zinc-900 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition-all disabled:opacity-50 flex items-center gap-2">
+                            {wcBusy === 'import' && <Loader2 className="animate-spin" size={12} />}
                             {wcBusy === 'import' ? 'Importando...' : 'Importar / atualizar base'}
                           </button>
                           <button type="button" disabled={!!wcBusy} onClick={syncWcPending} className="px-4 py-2 bg-adsplay text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-adsplay-dark transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-adsplay/20">
@@ -2029,6 +2036,13 @@ export function Media() {
                             {wcBusy === 'load' ? 'Carregando...' : 'Recarregar'}
                           </button>
                         </div>
+
+                        {wcMsg && (
+                          <div className={`px-4 py-3 rounded-2xl text-xs font-bold border ${wcMsg.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'}`}>
+                            {wcMsg.text}
+                          </div>
+                        )}
+
                         <p className="text-[9px] text-zinc-400 font-black uppercase tracking-widest">
                           {wcMatches.length} jogos · {finishedCount} encerrados · {pendingCount} pendentes
                         </p>
