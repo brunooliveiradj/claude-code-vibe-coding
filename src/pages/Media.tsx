@@ -881,7 +881,7 @@ export function Media() {
 
                 <div className="p-8 pt-6 flex-1 overflow-y-auto custom-scrollbar space-y-8">
                   <div className="grid grid-cols-10 gap-2">
-                    {(['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'MONTHLY_GOAL', 'CAROUSEL', 'NEWS_CLIPPING', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT', 'SMART_SALES'] as MediaType[]).map((t) => (
+                    {(['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'MONTHLY_GOAL', 'CAROUSEL', 'NEWS_CLIPPING', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT', 'SMART_SALES', 'WC_BRAZIL', 'WC_TODAY', 'WC_BRACKET'] as MediaType[]).map((t) => (
                       <button
                         key={t}
                         type="button"
@@ -937,7 +937,7 @@ export function Media() {
                         }`}
                       >
                         {getIcon(t)}
-                        <span className="text-[7px] font-bold uppercase tracking-widest">{t.split('_')[0]}</span>
+                        <span className="text-[7px] font-bold uppercase tracking-widest">{t === 'WC_BRAZIL' ? 'WC BRASIL' : t === 'WC_TODAY' ? 'WC HOJE' : t === 'WC_BRACKET' ? 'WC CHAVE' : t.split('_')[0]}</span>
                       </button>
                     ))}
                   </div>
