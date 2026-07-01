@@ -20,6 +20,8 @@ export interface WCMatch {
   awayFlag?: string;
   homeScore?: number | null;
   awayScore?: number | null;
+  homePens?: number | null; // penalty shootout goals (knockout only)
+  awayPens?: number | null;
   date?: string;
   time?: string;
   stage?: string;
@@ -31,6 +33,8 @@ export interface WCBrazilResult {
   opponentFlag?: string;
   brScore: number;
   advScore: number;
+  brPens?: number | null; // penalty shootout goals (knockout only)
+  advPens?: number | null;
   stage?: string;
   date?: string;
 }
@@ -57,9 +61,19 @@ export const WC_CACHE_MS: Record<WCType, number> = {
 };
 
 // V (vitória) / E (empate) / D (derrota) from Brazil's point of view.
-export const wcResultLetter = (brScore: number, advScore: number): 'V' | 'E' | 'D' => {
+// When regulation ends level and there was a shootout, the pens decide it.
+export const wcResultLetter = (
+  brScore: number,
+  advScore: number,
+  brPens?: number | null,
+  advPens?: number | null
+): 'V' | 'E' | 'D' => {
   if (brScore > advScore) return 'V';
   if (brScore < advScore) return 'D';
+  if (brPens != null && advPens != null) {
+    if (brPens > advPens) return 'V';
+    if (brPens < advPens) return 'D';
+  }
   return 'E';
 };
 
@@ -72,11 +86,11 @@ Traga a participação da SELEÇÃO BRASILEIRA MASCULINA nesta Copa.
 Retorne APENAS um JSON no formato:
 {
   "results": [
-    { "opponent": "Nome do adversário", "opponentFlag": "emoji da bandeira", "brScore": number, "advScore": number, "stage": "Fase (ex: Fase de Grupos — 1ª rodada)", "date": "DD/MM" }
+    { "opponent": "Nome do adversário", "opponentFlag": "emoji da bandeira", "brScore": number, "advScore": number, "brPens": number|null, "advPens": number|null, "stage": "Fase (ex: Fase de Grupos — 1ª rodada)", "date": "DD/MM" }
   ],
   "nextMatch": { "opponent": "Nome", "opponentFlag": "emoji", "date": "DD/MM/AAAA", "time": "HH:MM", "stage": "Fase", "venue": "Estádio, Cidade" }
 }
-Regras: "results" em ordem cronológica, SOMENTE jogos JÁ realizados do Brasil nesta Copa (placar do Brasil em brScore, do adversário em advScore). Se o Brasil ainda não estreou, "results": []. Se não houver próximo jogo agendado (eliminado ou campeão), "nextMatch": null.`;
+Regras: "results" em ordem cronológica, SOMENTE jogos JÁ realizados do Brasil nesta Copa (placar do Brasil em brScore, do adversário em advScore). Se o jogo foi decidido nos pênaltis, preencha brPens/advPens (gols na disputa); senão null. Se o Brasil ainda não estreou, "results": []. Se não houver próximo jogo agendado (eliminado ou campeão), "nextMatch": null.`;
   }
 
   if (type === 'WC_TODAY') {
@@ -85,10 +99,10 @@ Liste TODOS os jogos da Copa que acontecem HOJE.
 Retorne APENAS um JSON no formato:
 {
   "matches": [
-    { "home": "Time", "homeFlag": "emoji", "away": "Time", "awayFlag": "emoji", "homeScore": number|null, "awayScore": number|null, "time": "HH:MM", "stage": "Fase", "status": "scheduled|live|finished" }
+    { "home": "Time", "homeFlag": "emoji", "away": "Time", "awayFlag": "emoji", "homeScore": number|null, "awayScore": number|null, "homePens": number|null, "awayPens": number|null, "time": "HH:MM", "stage": "Fase", "status": "scheduled|live|finished" }
   ]
 }
-Regras: apenas jogos de HOJE, ordenados por horário. Placar null se ainda não começou. "status": "live" se em andamento, "finished" se encerrado, "scheduled" se ainda vai começar. Se não houver jogos hoje, "matches": [].`;
+Regras: apenas jogos de HOJE, ordenados por horário. Placar null se ainda não começou. Se foi decidido nos pênaltis, preencha homePens/awayPens; senão null. "status": "live" se em andamento, "finished" se encerrado, "scheduled" se ainda vai começar. Se não houver jogos hoje, "matches": [].`;
   }
 
   // WC_BRACKET
@@ -97,12 +111,12 @@ Traga o CHAVEAMENTO (mata-mata) atual da Copa.
 Retorne APENAS um JSON no formato:
 {
   "rounds": [
-    { "name": "Nome da fase (ex: Oitavas de Final)", "matches": [
-      { "home": "Time", "homeFlag": "emoji", "away": "Time", "awayFlag": "emoji", "homeScore": number|null, "awayScore": number|null, "status": "scheduled|live|finished" }
+    { "name": "Nome da fase (ex: 16 avos de final)", "matches": [
+      { "home": "Time", "homeFlag": "emoji", "away": "Time", "awayFlag": "emoji", "homeScore": number|null, "awayScore": number|null, "homePens": number|null, "awayPens": number|null, "status": "scheduled|live|finished" }
     ] }
   ]
 }
-Regras: ordene "rounds" da fase mais cedo para a Final. Inclua somente fases de mata-mata JÁ definidas (com confrontos conhecidos). Se o mata-mata ainda não começou, "rounds": []. Placar null se o jogo não terminou.`;
+Regras: ordene "rounds" da fase mais cedo para a Final. Inclua somente fases de mata-mata JÁ definidas (com confrontos conhecidos). Se o mata-mata ainda não começou, "rounds": []. Placar null se o jogo não terminou. Se foi decidido nos pênaltis, preencha homePens/awayPens (gols na disputa); senão null.`;
 };
 
 // Calls Gemini with Google Search grounding and returns the parsed JSON object

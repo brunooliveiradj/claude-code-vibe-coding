@@ -2426,8 +2426,9 @@ export function Player() {
                           {results.length === 0 ? (
                             <div className="h-full flex items-center justify-center text-zinc-500 text-xl font-bold">A seleção ainda não estreou</div>
                           ) : results.slice(0, 8).map((r: any, i: number) => {
-                            const letter = wcResultLetter(Number(r.brScore) || 0, Number(r.advScore) || 0);
+                            const letter = wcResultLetter(Number(r.brScore) || 0, Number(r.advScore) || 0, r.brPens, r.advPens);
                             const color = letter === 'V' ? 'bg-emerald-500' : letter === 'D' ? 'bg-rose-500' : 'bg-zinc-500';
+                            const hasPens = r.brPens != null && r.advPens != null;
                             return (
                               <div key={i} className="bg-white/5 border border-white/10 rounded-2xl px-6 py-4 flex items-center gap-5">
                                 <div className={`w-10 h-10 rounded-xl ${color} flex items-center justify-center text-white font-black text-lg shrink-0`}>{letter}</div>
@@ -2436,6 +2437,7 @@ export function Player() {
                                   <span className="text-2xl font-black text-white">{Number(r.brScore) || 0}</span>
                                   <span className="text-zinc-500 font-black">×</span>
                                   <span className="text-2xl font-black text-white">{Number(r.advScore) || 0}</span>
+                                  {hasPens && <span className="text-xs font-black text-yellow-400 shrink-0">({r.brPens}-{r.advPens} pên)</span>}
                                   <span className="text-2xl">{r.opponentFlag || ''}</span>
                                   <span className="text-xl font-bold text-zinc-200 truncate">{r.opponent}</span>
                                 </div>
@@ -2498,6 +2500,9 @@ export function Player() {
                             ) : (
                               <span className="text-3xl font-black text-zinc-500">×</span>
                             )}
+                            {m.homePens != null && m.awayPens != null && (
+                              <span className="text-xs font-black text-yellow-400">({m.homePens}-{m.awayPens} nos pênaltis)</span>
+                            )}
                             {badge(m)}
                           </div>
                           <div className="flex-1 flex items-center gap-4 min-w-0">
@@ -2521,6 +2526,10 @@ export function Player() {
                 if (m.homeScore == null || m.awayScore == null) return 0;
                 if (m.homeScore > m.awayScore) return 1;
                 if (m.awayScore > m.homeScore) return 2;
+                if (m.homePens != null && m.awayPens != null) {
+                  if (m.homePens > m.awayPens) return 1;
+                  if (m.awayPens > m.homePens) return 2;
+                }
                 return 0;
               };
               return (
@@ -2556,7 +2565,7 @@ export function Player() {
                                       <span className="text-xl">{m.homeFlag || '🏳️'}</span>
                                       <span className="text-sm font-black text-white truncate">{m.home || '—'}</span>
                                     </div>
-                                    <span className="text-lg font-black text-white shrink-0">{m.homeScore ?? ''}</span>
+                                    <span className="text-lg font-black text-white shrink-0">{m.homeScore ?? ''}{m.homePens != null ? <span className="text-xs text-yellow-400"> ({m.homePens})</span> : ''}</span>
                                   </div>
                                   <div className="h-px bg-white/10" />
                                   <div className={`flex items-center justify-between gap-2 ${w === 2 ? 'opacity-100' : 'opacity-60'}`}>
@@ -2564,7 +2573,7 @@ export function Player() {
                                       <span className="text-xl">{m.awayFlag || '🏳️'}</span>
                                       <span className="text-sm font-black text-white truncate">{m.away || '—'}</span>
                                     </div>
-                                    <span className="text-lg font-black text-white shrink-0">{m.awayScore ?? ''}</span>
+                                    <span className="text-lg font-black text-white shrink-0">{m.awayScore ?? ''}{m.awayPens != null ? <span className="text-xs text-yellow-400"> ({m.awayPens})</span> : ''}</span>
                                   </div>
                                 </div>
                               );

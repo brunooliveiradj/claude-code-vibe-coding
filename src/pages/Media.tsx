@@ -1976,6 +1976,10 @@ export function Media() {
                                       <input type="number" className={inputCls} placeholder="BRA" value={r.brScore ?? ''} onChange={e => { const l = [...payload.results]; l[i] = { ...l[i], brScore: Number(e.target.value) }; setPayload({ ...payload, results: l }); }} />
                                       <input type="number" className={inputCls} placeholder="ADV" value={r.advScore ?? ''} onChange={e => { const l = [...payload.results]; l[i] = { ...l[i], advScore: Number(e.target.value) }; setPayload({ ...payload, results: l }); }} />
                                     </div>
+                                    <div className="flex gap-2">
+                                      <input type="number" className={inputCls} placeholder="Pên BRA" value={r.brPens ?? ''} onChange={e => { const l = [...payload.results]; l[i] = { ...l[i], brPens: parseScore(e.target.value) }; setPayload({ ...payload, results: l }); }} />
+                                      <input type="number" className={inputCls} placeholder="Pên ADV" value={r.advPens ?? ''} onChange={e => { const l = [...payload.results]; l[i] = { ...l[i], advPens: parseScore(e.target.value) }; setPayload({ ...payload, results: l }); }} />
+                                    </div>
                                     <input className={inputCls} placeholder="Fase" value={r.stage || ''} onChange={e => { const l = [...payload.results]; l[i] = { ...l[i], stage: e.target.value }; setPayload({ ...payload, results: l }); }} />
                                   </div>
                                 </div>
@@ -2004,6 +2008,10 @@ export function Media() {
                                   <div className="flex gap-2">
                                     <input type="number" className={inputCls} placeholder="Gols M" value={m.homeScore ?? ''} onChange={e => { const l = [...payload.matches]; l[i] = { ...l[i], homeScore: parseScore(e.target.value) }; setPayload({ ...payload, matches: l }); }} />
                                     <input type="number" className={inputCls} placeholder="Gols V" value={m.awayScore ?? ''} onChange={e => { const l = [...payload.matches]; l[i] = { ...l[i], awayScore: parseScore(e.target.value) }; setPayload({ ...payload, matches: l }); }} />
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <input type="number" className={inputCls} placeholder="Pên M" value={m.homePens ?? ''} onChange={e => { const l = [...payload.matches]; l[i] = { ...l[i], homePens: parseScore(e.target.value) }; setPayload({ ...payload, matches: l }); }} />
+                                    <input type="number" className={inputCls} placeholder="Pên V" value={m.awayPens ?? ''} onChange={e => { const l = [...payload.matches]; l[i] = { ...l[i], awayPens: parseScore(e.target.value) }; setPayload({ ...payload, matches: l }); }} />
                                   </div>
                                   <input className={inputCls} placeholder="Hora (HH:MM)" value={m.time || ''} onChange={e => { const l = [...payload.matches]; l[i] = { ...l[i], time: e.target.value }; setPayload({ ...payload, matches: l }); }} />
                                   <input className={inputCls} placeholder="Fase" value={m.stage || ''} onChange={e => { const l = [...payload.matches]; l[i] = { ...l[i], stage: e.target.value }; setPayload({ ...payload, matches: l }); }} />
@@ -2038,12 +2046,14 @@ export function Media() {
                                     <input className={inputCls} placeholder="Time A" value={m.home || ''} onChange={e => { const l = [...payload.rounds]; const ms = [...(l[ri].matches || [])]; ms[mi] = { ...ms[mi], home: e.target.value }; l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} />
                                     <div className="flex gap-2">
                                       <input className={inputCls} placeholder="🏳️" value={m.homeFlag || ''} onChange={e => { const l = [...payload.rounds]; const ms = [...(l[ri].matches || [])]; ms[mi] = { ...ms[mi], homeFlag: e.target.value }; l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} />
-                                      <input type="number" className={inputCls} placeholder="—" value={m.homeScore ?? ''} onChange={e => { const l = [...payload.rounds]; const ms = [...(l[ri].matches || [])]; ms[mi] = { ...ms[mi], homeScore: parseScore(e.target.value) }; l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} />
+                                      <input type="number" className={inputCls} placeholder="Gols" value={m.homeScore ?? ''} onChange={e => { const l = [...payload.rounds]; const ms = [...(l[ri].matches || [])]; ms[mi] = { ...ms[mi], homeScore: parseScore(e.target.value) }; l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} />
+                                      <input type="number" className={inputCls} placeholder="Pên" value={m.homePens ?? ''} onChange={e => { const l = [...payload.rounds]; const ms = [...(l[ri].matches || [])]; ms[mi] = { ...ms[mi], homePens: parseScore(e.target.value) }; l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} />
                                     </div>
                                     <input className={inputCls} placeholder="Time B" value={m.away || ''} onChange={e => { const l = [...payload.rounds]; const ms = [...(l[ri].matches || [])]; ms[mi] = { ...ms[mi], away: e.target.value }; l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} />
                                     <div className="flex gap-2">
                                       <input className={inputCls} placeholder="🏳️" value={m.awayFlag || ''} onChange={e => { const l = [...payload.rounds]; const ms = [...(l[ri].matches || [])]; ms[mi] = { ...ms[mi], awayFlag: e.target.value }; l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} />
-                                      <input type="number" className={inputCls} placeholder="—" value={m.awayScore ?? ''} onChange={e => { const l = [...payload.rounds]; const ms = [...(l[ri].matches || [])]; ms[mi] = { ...ms[mi], awayScore: parseScore(e.target.value) }; l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} />
+                                      <input type="number" className={inputCls} placeholder="Gols" value={m.awayScore ?? ''} onChange={e => { const l = [...payload.rounds]; const ms = [...(l[ri].matches || [])]; ms[mi] = { ...ms[mi], awayScore: parseScore(e.target.value) }; l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} />
+                                      <input type="number" className={inputCls} placeholder="Pên" value={m.awayPens ?? ''} onChange={e => { const l = [...payload.rounds]; const ms = [...(l[ri].matches || [])]; ms[mi] = { ...ms[mi], awayPens: parseScore(e.target.value) }; l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} />
                                     </div>
                                     <button type="button" onClick={() => { const l = [...payload.rounds]; const ms = (l[ri].matches || []).filter((_: any, j: number) => j !== mi); l[ri] = { ...l[ri], matches: ms }; setPayload({ ...payload, rounds: l }); }} className="col-span-2 text-[9px] text-rose-500 font-black uppercase tracking-widest text-right">Remover confronto</button>
                                   </div>
