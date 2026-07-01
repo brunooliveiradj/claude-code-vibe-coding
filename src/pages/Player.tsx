@@ -48,7 +48,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { GoogleGenAI } from "@google/genai";
-import { fetchWorldCupData, WC_CACHE_MS, wcResultLetter, WCType } from '../lib/worldcup';
+import { fetchWorldCupData, WC_CACHE_MS, wcResultLetter, WCType, flagUrl } from '../lib/worldcup';
 import {
   collection,
   doc,
@@ -120,6 +120,25 @@ const safeStorage = {
       // Ignore
     }
   }
+};
+
+// Country flag: prefers a real flag image (from ISO code) since emoji flags
+// often don't render on Samsung/Tizen TV browsers. Falls back to emoji, then 🏳️.
+const TeamFlag = ({ code, emoji, imgClass, emojiClass }: { code?: string; emoji?: string; imgClass?: string; emojiClass?: string }) => {
+  const [err, setErr] = useState(false);
+  const url = flagUrl(code);
+  if (url && !err) {
+    return (
+      <img
+        src={url}
+        alt=""
+        referrerPolicy="no-referrer"
+        onError={() => setErr(true)}
+        className={`inline-block object-cover rounded-[3px] shadow-sm ${imgClass || ''}`}
+      />
+    );
+  }
+  return <span className={emojiClass}>{emoji || '🏳️'}</span>;
 };
 
 // Helper Components for Animations
@@ -2383,7 +2402,7 @@ export function Player() {
                 <div className="w-full h-full bg-gradient-to-br from-[#00401f] via-[#003d1a] to-[#0a0a0a] flex flex-col p-16 gap-10 relative overflow-hidden">
                   <div className="absolute -top-1/4 right-0 w-[60vw] h-[60vw] bg-yellow-400/10 blur-[180px] rounded-full pointer-events-none" />
                   <div className="flex items-center gap-5 relative z-10">
-                    <span className="text-7xl">🇧🇷</span>
+                    <TeamFlag code="br" imgClass="w-20 h-14" emojiClass="text-7xl" />
                     <div>
                       <h2 className="text-6xl font-black text-white tracking-tighter leading-none">Seleção Brasileira</h2>
                       <p className="text-yellow-400 font-black uppercase tracking-[0.3em] text-sm mt-2">Copa do Mundo FIFA 2026</p>
@@ -2400,12 +2419,12 @@ export function Player() {
                           <div className="flex-1 bg-white/5 border border-white/10 rounded-[2.5rem] p-10 flex flex-col justify-center gap-8 backdrop-blur-sm">
                             <div className="flex items-center justify-center gap-8">
                               <div className="flex flex-col items-center gap-3">
-                                <span className="text-7xl">🇧🇷</span>
+                                <TeamFlag code="br" imgClass="w-24 h-16" emojiClass="text-7xl" />
                                 <span className="text-2xl font-black text-white">BRASIL</span>
                               </div>
                               <span className="text-4xl font-black text-zinc-500">×</span>
                               <div className="flex flex-col items-center gap-3">
-                                <span className="text-7xl">{next.opponentFlag || '🏳️'}</span>
+                                <TeamFlag code={next.opponentCode} emoji={next.opponentFlag} imgClass="w-24 h-16" emojiClass="text-7xl" />
                                 <span className="text-2xl font-black text-white text-center">{(next.opponent || 'A definir').toUpperCase()}</span>
                               </div>
                             </div>
@@ -2433,12 +2452,12 @@ export function Player() {
                               <div key={i} className="bg-white/5 border border-white/10 rounded-2xl px-6 py-4 flex items-center gap-5">
                                 <div className={`w-10 h-10 rounded-xl ${color} flex items-center justify-center text-white font-black text-lg shrink-0`}>{letter}</div>
                                 <div className="flex-1 flex items-center gap-3 min-w-0">
-                                  <span className="text-2xl">🇧🇷</span>
+                                  <TeamFlag code="br" imgClass="w-8 h-6" emojiClass="text-2xl" />
                                   <span className="text-2xl font-black text-white">{Number(r.brScore) || 0}</span>
                                   <span className="text-zinc-500 font-black">×</span>
                                   <span className="text-2xl font-black text-white">{Number(r.advScore) || 0}</span>
                                   {hasPens && <span className="text-xs font-black text-yellow-400 shrink-0">({r.brPens}-{r.advPens} pên)</span>}
-                                  <span className="text-2xl">{r.opponentFlag || ''}</span>
+                                  <TeamFlag code={r.opponentCode} emoji={r.opponentFlag} imgClass="w-8 h-6" emojiClass="text-2xl" />
                                   <span className="text-xl font-bold text-zinc-200 truncate">{r.opponent}</span>
                                 </div>
                                 {r.stage && <span className="text-[11px] font-black text-zinc-500 uppercase tracking-widest shrink-0">{r.stage}</span>}
@@ -2492,7 +2511,7 @@ export function Player() {
                         <div key={i} className="bg-white/5 border border-white/10 rounded-[2rem] px-8 py-6 flex items-center gap-6 backdrop-blur-sm">
                           <div className="flex-1 flex items-center justify-end gap-4 min-w-0">
                             <span className="text-2xl font-black text-white truncate text-right">{(m.home || '').toUpperCase()}</span>
-                            <span className="text-5xl">{m.homeFlag || '🏳️'}</span>
+                            <TeamFlag code={m.homeCode} emoji={m.homeFlag} imgClass="w-16 h-11" emojiClass="text-5xl" />
                           </div>
                           <div className="flex flex-col items-center gap-2 shrink-0 min-w-[130px]">
                             {showScore(m) ? (
@@ -2506,7 +2525,7 @@ export function Player() {
                             {badge(m)}
                           </div>
                           <div className="flex-1 flex items-center gap-4 min-w-0">
-                            <span className="text-5xl">{m.awayFlag || '🏳️'}</span>
+                            <TeamFlag code={m.awayCode} emoji={m.awayFlag} imgClass="w-16 h-11" emojiClass="text-5xl" />
                             <span className="text-2xl font-black text-white truncate">{(m.away || '').toUpperCase()}</span>
                           </div>
                         </div>
@@ -2562,7 +2581,7 @@ export function Player() {
                                 <div key={mi} className="bg-white/5 border border-white/10 rounded-2xl p-3 space-y-2">
                                   <div className={`flex items-center justify-between gap-2 ${w === 1 ? 'opacity-100' : 'opacity-60'}`}>
                                     <div className="flex items-center gap-2 min-w-0">
-                                      <span className="text-xl">{m.homeFlag || '🏳️'}</span>
+                                      <TeamFlag code={m.homeCode} emoji={m.homeFlag} imgClass="w-6 h-4" emojiClass="text-xl" />
                                       <span className="text-sm font-black text-white truncate">{m.home || '—'}</span>
                                     </div>
                                     <span className="text-lg font-black text-white shrink-0">{m.homeScore ?? ''}{m.homePens != null ? <span className="text-xs text-yellow-400"> ({m.homePens})</span> : ''}</span>
@@ -2570,7 +2589,7 @@ export function Player() {
                                   <div className="h-px bg-white/10" />
                                   <div className={`flex items-center justify-between gap-2 ${w === 2 ? 'opacity-100' : 'opacity-60'}`}>
                                     <div className="flex items-center gap-2 min-w-0">
-                                      <span className="text-xl">{m.awayFlag || '🏳️'}</span>
+                                      <TeamFlag code={m.awayCode} emoji={m.awayFlag} imgClass="w-6 h-4" emojiClass="text-xl" />
                                       <span className="text-sm font-black text-white truncate">{m.away || '—'}</span>
                                     </div>
                                     <span className="text-lg font-black text-white shrink-0">{m.awayScore ?? ''}{m.awayPens != null ? <span className="text-xs text-yellow-400"> ({m.awayPens})</span> : ''}</span>

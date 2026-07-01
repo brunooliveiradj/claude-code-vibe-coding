@@ -16,7 +16,9 @@ export type WCType = 'WC_BRAZIL' | 'WC_TODAY' | 'WC_BRACKET';
 export interface WCMatch {
   home: string;
   away: string;
-  homeFlag?: string;
+  homeCode?: string; // ISO 3166-1 alpha-2 (e.g. "br"); primary flag source
+  awayCode?: string;
+  homeFlag?: string; // emoji fallback
   awayFlag?: string;
   homeScore?: number | null;
   awayScore?: number | null;
@@ -30,6 +32,7 @@ export interface WCMatch {
 
 export interface WCBrazilResult {
   opponent: string;
+  opponentCode?: string;
   opponentFlag?: string;
   brScore: number;
   advScore: number;
@@ -41,12 +44,23 @@ export interface WCBrazilResult {
 
 export interface WCBrazilNext {
   opponent: string;
+  opponentCode?: string;
   opponentFlag?: string;
   date?: string;
   time?: string;
   stage?: string;
   venue?: string;
 }
+
+// Build a flag image URL from an ISO 3166-1 alpha-2 country code. Uses flagcdn
+// (standard country flag artwork, same source family as Wikipedia). UK nations
+// use codes like "gb-eng" / "gb-sct" / "gb-wls". Swap this base if ever blocked.
+export const flagUrl = (code?: string): string | null => {
+  if (!code) return null;
+  const c = code.trim().toLowerCase();
+  if (!c) return null;
+  return `https://flagcdn.com/w160/${c}.png`;
+};
 
 export interface WCBracketRound {
   name: string;
@@ -78,7 +92,7 @@ export const wcResultLetter = (
 };
 
 const buildPrompt = (type: WCType, now: string): string => {
-  const base = `Você é um assistente de dados esportivos. Use a BUSCA DO GOOGLE para consultar dados REAIS e em tempo real da Copa do Mundo FIFA 2026. Hoje é ${now} (horário de Brasília). NUNCA invente resultados, placares, datas ou confrontos — se não tiver certeza, deixe o campo vazio/null.`;
+  const base = `Você é um assistente de dados esportivos. Use a BUSCA DO GOOGLE para consultar dados REAIS e em tempo real da Copa do Mundo FIFA 2026. Hoje é ${now} (horário de Brasília). NUNCA invente resultados, placares, datas ou confrontos — se não tiver certeza, deixe o campo vazio/null. Para CADA seleção, informe o código ISO 3166-1 alpha-2 do país em minúsculas (ex: Brasil="br", Japão="jp", Alemanha="de", Argentina="ar", EUA="us"). Para as seleções do Reino Unido use: Inglaterra="gb-eng", Escócia="gb-sct", País de Gales="gb-wls", Irlanda do Norte="gb-nir".`;
 
   if (type === 'WC_BRAZIL') {
     return `${base}
@@ -86,9 +100,9 @@ Traga a participação da SELEÇÃO BRASILEIRA MASCULINA nesta Copa.
 Retorne APENAS um JSON no formato:
 {
   "results": [
-    { "opponent": "Nome do adversário", "opponentFlag": "emoji da bandeira", "brScore": number, "advScore": number, "brPens": number|null, "advPens": number|null, "stage": "Fase (ex: Fase de Grupos — 1ª rodada)", "date": "DD/MM" }
+    { "opponent": "Nome do adversário", "opponentCode": "código ISO", "opponentFlag": "emoji da bandeira", "brScore": number, "advScore": number, "brPens": number|null, "advPens": number|null, "stage": "Fase (ex: Fase de Grupos — 1ª rodada)", "date": "DD/MM" }
   ],
-  "nextMatch": { "opponent": "Nome", "opponentFlag": "emoji", "date": "DD/MM/AAAA", "time": "HH:MM", "stage": "Fase", "venue": "Estádio, Cidade" }
+  "nextMatch": { "opponent": "Nome", "opponentCode": "código ISO", "opponentFlag": "emoji", "date": "DD/MM/AAAA", "time": "HH:MM", "stage": "Fase", "venue": "Estádio, Cidade" }
 }
 Regras: "results" em ordem cronológica, SOMENTE jogos JÁ realizados do Brasil nesta Copa (placar do Brasil em brScore, do adversário em advScore). Se o jogo foi decidido nos pênaltis, preencha brPens/advPens (gols na disputa); senão null. Se o Brasil ainda não estreou, "results": []. Se não houver próximo jogo agendado (eliminado ou campeão), "nextMatch": null.`;
   }
@@ -99,7 +113,7 @@ Liste TODOS os jogos da Copa que acontecem HOJE.
 Retorne APENAS um JSON no formato:
 {
   "matches": [
-    { "home": "Time", "homeFlag": "emoji", "away": "Time", "awayFlag": "emoji", "homeScore": number|null, "awayScore": number|null, "homePens": number|null, "awayPens": number|null, "time": "HH:MM", "stage": "Fase", "status": "scheduled|live|finished" }
+    { "home": "Time", "homeCode": "código ISO", "homeFlag": "emoji", "away": "Time", "awayCode": "código ISO", "awayFlag": "emoji", "homeScore": number|null, "awayScore": number|null, "homePens": number|null, "awayPens": number|null, "time": "HH:MM", "stage": "Fase", "status": "scheduled|live|finished" }
   ]
 }
 Regras: apenas jogos de HOJE, ordenados por horário. Placar null se ainda não começou. Se foi decidido nos pênaltis, preencha homePens/awayPens; senão null. "status": "live" se em andamento, "finished" se encerrado, "scheduled" se ainda vai começar. Se não houver jogos hoje, "matches": [].`;
@@ -112,7 +126,7 @@ Retorne APENAS um JSON no formato:
 {
   "rounds": [
     { "name": "Nome da fase (ex: 16 avos de final)", "matches": [
-      { "home": "Time", "homeFlag": "emoji", "away": "Time", "awayFlag": "emoji", "homeScore": number|null, "awayScore": number|null, "homePens": number|null, "awayPens": number|null, "status": "scheduled|live|finished" }
+      { "home": "Time", "homeCode": "código ISO", "homeFlag": "emoji", "away": "Time", "awayCode": "código ISO", "awayFlag": "emoji", "homeScore": number|null, "awayScore": number|null, "homePens": number|null, "awayPens": number|null, "status": "scheduled|live|finished" }
     ] }
   ]
 }
