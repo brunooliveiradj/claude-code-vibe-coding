@@ -54,14 +54,20 @@ export interface WCBracketRound {
   matches: WCMatch[];
 }
 
-// Cache window for the broad TV-side refresh of all pending matches.
-export const WC_PENDING_CACHE_MS = 10 * 60 * 1000;
-// A live game refreshes much faster than the broad pending sweep.
-export const WC_LIVE_REFRESH_MS = 60 * 1000;
-// A kicked-off match is treated as live for this long (unless marked finished).
-export const WC_LIVE_WINDOW_MS = 150 * 60 * 1000; // 2h30
+// While a game is live the TV re-fetches its score every 5 minutes.
+export const WC_LIVE_REFRESH_MS = 5 * 60 * 1000;
+// A kicked-off match is treated as live for 2h (90' + halftime + stoppage),
+// after which the TV stops fetching until the next match kicks off.
+export const WC_LIVE_WINDOW_MS = 120 * 60 * 1000;
 
 // --- Time / live detection (Brazil is fixed GMT-3, no DST) ------------------
+
+// Format an ISO date (YYYY-MM-DD) as the Brazilian DD/MM.
+export const fmtBrDate = (iso?: string): string => {
+  if (!iso) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? `${m[3]}/${m[2]}` : iso;
+};
 
 // Today's date (YYYY-MM-DD) in Brasília time, regardless of the TV's timezone.
 export const brasiliaTodayISO = (nowMs: number): string =>

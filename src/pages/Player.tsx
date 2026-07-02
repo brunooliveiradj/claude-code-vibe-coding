@@ -48,7 +48,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { GoogleGenAI } from "@google/genai";
-import { deriveBrazil, deriveToday, deriveBracket, wcResultLetter, flagUrl, fetchWcPendingUpdates, matchDocId, knockoutOrder, isLiveByClock, brasiliaTodayISO, WC_PENDING_CACHE_MS, WC_LIVE_REFRESH_MS, WCMatch } from '../lib/worldcup';
+import { deriveBrazil, deriveToday, deriveBracket, wcResultLetter, flagUrl, fetchWcPendingUpdates, matchDocId, knockoutOrder, isLiveByClock, brasiliaTodayISO, fmtBrDate, WC_LIVE_REFRESH_MS, WCMatch } from '../lib/worldcup';
 import {
   collection,
   doc,
@@ -660,7 +660,6 @@ export function Player() {
   const [wcMatches, setWcMatches] = useState<WCMatch[] | null>(null);
   const wcMatchesRef = useRef<WCMatch[] | null>(null);
   const wcUnsubRef = useRef<null | (() => void)>(null);
-  const wcLastBroadRef = useRef(0);
   const wcPrevScoresRef = useRef<Record<string, { h: number; a: number }>>({});
   const [wcGoal, setWcGoal] = useState<{ id: string; side: 'home' | 'away' } | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -1095,47 +1094,38 @@ export function Player() {
   const wcToday = useMemo(() => deriveToday(wcMatches || [], brasiliaTodayISO(nowMs)), [wcMatches, nowMs]);
   const wcBracket = useMemo(() => deriveBracket(wcMatches || []), [wcMatches]);
 
-  // TV-side IA refresh. Fast loop for the game(s) currently LIVE (by clock),
-  // plus a broad sweep of all pending games every WC_PENDING_CACHE_MS. Never
-  // rewrites a finished game. Gated by the card's autoRefresh toggle.
+  // TV-side IA refresh, LIVE-ONLY to save resources: every 5 min, fetch only
+  // the game(s) currently live (kickoff passed, within the 2h window). If no
+  // game is live, nothing is fetched. Never rewrites a finished game. Gated by
+  // the card's autoRefresh toggle. Scheduled/future games are the admin's job.
   useEffect(() => {
     if (!isWC) return;
     let cancelled = false;
-
-    const applyUpdates = async (list: WCMatch[]) => {
-      if (!list.length) return;
-      const updates = await fetchWcPendingUpdates(list);
-      for (const u of updates) {
-        const id = u.id || matchDocId(u);
-        const existing = (wcMatchesRef.current || []).find(m => m.id === id);
-        if (!existing || existing.status === 'finished') continue; // TV can't create or rewrite finished
-        await updateDoc(doc(db, 'wc_matches', id), {
-          homeScore: u.homeScore ?? null,
-          awayScore: u.awayScore ?? null,
-          homePens: u.homePens ?? null,
-          awayPens: u.awayPens ?? null,
-          status: u.status || 'scheduled',
-          time: u.time || existing.time || '',
-          updatedAt: serverTimestamp(),
-        }).catch(e => console.error('wc_matches update error:', e));
-      }
-    };
 
     const tick = async () => {
       if (cancelled) return;
       if (currentMedia?.payload?.autoRefresh === false) return;
       if (document.visibilityState !== 'visible') return;
-      const all = wcMatchesRef.current || [];
-      const now = Date.now();
+      const live = (wcMatchesRef.current || []).filter(m => isLiveByClock(m, Date.now()));
+      if (live.length === 0) return; // no game happening → don't fetch
       try {
-        const live = all.filter(m => isLiveByClock(m, now));
-        if (live.length) await applyUpdates(live);              // fast: live game(s)
-        if (now - wcLastBroadRef.current > WC_PENDING_CACHE_MS) { // slow: all pending
-          wcLastBroadRef.current = now;
-          await applyUpdates(all.filter(m => m.status !== 'finished'));
+        const updates = await fetchWcPendingUpdates(live);
+        for (const u of updates) {
+          const id = u.id || matchDocId(u);
+          const existing = (wcMatchesRef.current || []).find(m => m.id === id);
+          if (!existing || existing.status === 'finished') continue; // TV can't create or rewrite finished
+          await updateDoc(doc(db, 'wc_matches', id), {
+            homeScore: u.homeScore ?? null,
+            awayScore: u.awayScore ?? null,
+            homePens: u.homePens ?? null,
+            awayPens: u.awayPens ?? null,
+            status: u.status || 'scheduled',
+            time: u.time || existing.time || '',
+            updatedAt: serverTimestamp(),
+          }).catch(e => console.error('wc_matches update error:', e));
         }
       } catch (e) {
-        console.error('World Cup refresh error:', e);
+        console.error('World Cup live refresh error:', e);
       }
     };
 
@@ -2478,7 +2468,8 @@ export function Player() {
                             </div>
                             <div className="flex flex-col items-center gap-3 text-center">
                               {next.stage && <span className="px-5 py-2 bg-emerald-500 text-white rounded-full text-sm font-black uppercase tracking-widest">{next.stage}</span>}
-                              <p className="text-5xl font-black text-zinc-900">{next.date}{next.time ? ` · ${next.time}` : ''}</p>
+                              <p className="text-5xl font-black text-zinc-900">{fmtBrDate(next.date) || 'A definir'}{next.time ? ` · ${next.time}` : ''}</p>
+                              <p className="text-lg text-zinc-400 font-bold uppercase tracking-widest">Horário de Brasília</p>
                               {next.venue && <p className="text-xl text-zinc-500 font-bold">{next.venue}</p>}
                             </div>
                           </div>
@@ -2492,7 +2483,7 @@ export function Player() {
                         <div className="flex-1 space-y-3 overflow-hidden">
                           {results.length === 0 ? (
                             <div className="h-full flex items-center justify-center text-zinc-400 text-2xl font-bold">A seleção ainda não estreou</div>
-                          ) : results.slice(0, 7).map((r: any, i: number) => {
+                          ) : results.slice(0, 8).map((r: any, i: number) => {
                             const letter = wcResultLetter(Number(r.brScore) || 0, Number(r.advScore) || 0, r.brPens, r.advPens);
                             const color = letter === 'V' ? 'bg-emerald-500' : letter === 'D' ? 'bg-rose-500' : 'bg-zinc-400';
                             const hasPens = r.brPens != null && r.advPens != null;
@@ -2508,7 +2499,10 @@ export function Player() {
                                   <TeamFlag code={r.opponentCode} emoji={r.opponentFlag} imgClass="w-10 h-7" emojiClass="text-3xl" />
                                   <span className="text-2xl font-bold text-zinc-700 truncate">{r.opponent}</span>
                                 </div>
-                                {r.stage && <span className="text-xs font-black text-zinc-400 uppercase tracking-widest shrink-0">{r.stage}</span>}
+                                <div className="flex flex-col items-end shrink-0 text-right">
+                                  {r.stage && <span className="text-xs font-black text-zinc-400 uppercase tracking-widest">{r.stage}</span>}
+                                  {r.date && <span className="text-xs font-bold text-zinc-400">{fmtBrDate(r.date)}</span>}
+                                </div>
                               </div>
                             );
                           })}
@@ -2530,7 +2524,7 @@ export function Player() {
               const badge = (m: any) => {
                 if (m.status === 'finished') return <span className="px-4 py-1.5 bg-zinc-200 text-zinc-600 rounded-full text-sm font-black uppercase tracking-widest">Encerrado</span>;
                 if (liveNow(m)) return <span className="px-4 py-1.5 bg-rose-500 text-white rounded-full text-sm font-black uppercase tracking-widest flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-white animate-pulse" />Ao Vivo</span>;
-                return <span className="px-4 py-1.5 bg-zinc-900 text-white rounded-full text-sm font-black uppercase tracking-widest">{m.time || '—'}</span>;
+                return <span className="px-4 py-1.5 bg-zinc-900 text-white rounded-full text-sm font-black uppercase tracking-widest">Agendado</span>;
               };
               return (
                 <div className="w-full h-full bg-gradient-to-b from-white to-zinc-100 flex flex-col p-16 gap-8 relative overflow-hidden">
@@ -2585,6 +2579,7 @@ export function Player() {
                                 <span className="text-sm font-black text-emerald-600">({m.homePens}-{m.awayPens} nos pênaltis)</span>
                               )}
                               {badge(m)}
+                              <span className="text-sm font-black text-zinc-500">{m.time ? `${m.time} · Brasília` : 'Horário a definir'}</span>
                             </div>
                             <div className="flex-1 flex items-center gap-4 min-w-0">
                               <TeamFlag code={m.awayCode} emoji={m.awayFlag} imgClass="w-20 h-14" emojiClass="text-6xl" />
@@ -2627,29 +2622,40 @@ export function Player() {
               const finalM = roundMatches(6)[0] || null;
               const thirdM = roundMatches(5)[0] || null;
 
-              const box = (m: any, key: number) => {
-                if (!m) return <div key={key} className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50/60 min-h-[3rem]" />;
+              // Flags grow round by round: fewer teams left → more emphasis.
+              const TIER: Record<string, { flag: string; score: string; size: string; pad: string; gap: string; min: string }> = {
+                r32:   { flag: 'w-8 h-6',   score: 'text-base', size: 'w80',  pad: 'px-2 py-1.5', gap: 'gap-1.5', min: 'min-h-[3rem]' },
+                r16:   { flag: 'w-11 h-8',  score: 'text-xl',   size: 'w160', pad: 'px-3 py-2',   gap: 'gap-2',   min: 'min-h-[3.5rem]' },
+                qf:    { flag: 'w-14 h-10', score: 'text-2xl',  size: 'w160', pad: 'px-4 py-3',   gap: 'gap-2.5', min: 'min-h-[4.5rem]' },
+                sf:    { flag: 'w-20 h-14', score: 'text-4xl',  size: 'w320', pad: 'px-5 py-4',   gap: 'gap-3',   min: 'min-h-[6rem]' },
+                final: { flag: 'w-28 h-20', score: 'text-6xl',  size: 'w320', pad: 'px-6 py-6',   gap: 'gap-4',   min: 'min-h-[8rem]' },
+                third: { flag: 'w-14 h-10', score: 'text-2xl',  size: 'w160', pad: 'px-4 py-3',   gap: 'gap-2.5', min: 'min-h-[4.5rem]' },
+              };
+              const box = (m: any, key: number, tier: string = 'r32') => {
+                const t = TIER[tier] || TIER.r32;
+                const emphasize = tier === 'sf' || tier === 'final';
+                if (!m) return <div key={key} className={`rounded-xl border border-dashed border-zinc-200 bg-zinc-50/60 ${t.min}`} />;
                 const w = winner(m);
                 return (
-                  <div key={key} className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 flex flex-col gap-1 shadow-sm">
-                    <div className={`flex items-center gap-1.5 ${w === 2 ? 'opacity-45' : ''}`}>
-                      <TeamFlag code={m.homeCode} emoji={m.homeFlag} size="w80" imgClass="w-8 h-6" emojiClass="text-base" />
-                      <span className={`text-base font-black ml-auto ${w === 1 ? 'text-emerald-600' : 'text-zinc-900'}`}>{m.homeScore ?? ''}{m.homePens != null ? ` (${m.homePens})` : ''}</span>
+                  <div key={key} className={`rounded-xl border bg-white ${t.pad} flex flex-col ${t.gap} shadow-sm ${emphasize ? 'border-emerald-300 shadow-emerald-900/10' : 'border-zinc-200'}`}>
+                    <div className={`flex items-center ${t.gap} ${w === 2 ? 'opacity-45' : ''}`}>
+                      <TeamFlag code={m.homeCode} emoji={m.homeFlag} size={t.size} imgClass={t.flag} emojiClass={t.score} />
+                      <span className={`${t.score} font-black ml-auto ${w === 1 ? 'text-emerald-600' : 'text-zinc-900'}`}>{m.homeScore ?? ''}{m.homePens != null ? ` (${m.homePens})` : ''}</span>
                     </div>
                     <div className="h-px bg-zinc-100" />
-                    <div className={`flex items-center gap-1.5 ${w === 1 ? 'opacity-45' : ''}`}>
-                      <TeamFlag code={m.awayCode} emoji={m.awayFlag} size="w80" imgClass="w-8 h-6" emojiClass="text-base" />
-                      <span className={`text-base font-black ml-auto ${w === 2 ? 'text-emerald-600' : 'text-zinc-900'}`}>{m.awayScore ?? ''}{m.awayPens != null ? ` (${m.awayPens})` : ''}</span>
+                    <div className={`flex items-center ${t.gap} ${w === 1 ? 'opacity-45' : ''}`}>
+                      <TeamFlag code={m.awayCode} emoji={m.awayFlag} size={t.size} imgClass={t.flag} emojiClass={t.score} />
+                      <span className={`${t.score} font-black ml-auto ${w === 2 ? 'text-emerald-600' : 'text-zinc-900'}`}>{m.awayScore ?? ''}{m.awayPens != null ? ` (${m.awayPens})` : ''}</span>
                     </div>
                   </div>
                 );
               };
 
-              const col = (label: string, boxes: any[], k: string) => (
+              const col = (label: string, boxes: any[], k: string, tier: string = 'r32') => (
                 <div key={k} className="flex-1 flex flex-col min-w-0">
                   <h4 className="text-[11px] font-black text-emerald-600 uppercase tracking-widest text-center mb-3 truncate">{label}</h4>
                   <div className="flex-1 flex flex-col justify-around gap-1.5">
-                    {boxes.map((m, i) => box(m, i))}
+                    {boxes.map((m, i) => box(m, i, tier))}
                   </div>
                 </div>
               );
@@ -2671,24 +2677,24 @@ export function Player() {
                     </div>
                   ) : (
                     <div className="flex-1 flex items-stretch gap-3 relative z-10 min-h-0">
-                      {col('2ª Fase', r32L, 'r32l')}
-                      {col('Oitavas', r16L, 'r16l')}
-                      {col('Quartas', qfL, 'qfl')}
-                      {col('Semifinais', sfL, 'sfl')}
-                      <div className="flex flex-col items-center justify-center gap-6 px-1 shrink-0" style={{ flexBasis: '170px' }}>
+                      {col('2ª Fase', r32L, 'r32l', 'r32')}
+                      {col('Oitavas', r16L, 'r16l', 'r16')}
+                      {col('Quartas', qfL, 'qfl', 'qf')}
+                      {col('Semifinais', sfL, 'sfl', 'sf')}
+                      <div className="flex flex-col items-center justify-center gap-8 px-2 shrink-0" style={{ flexBasis: '260px' }}>
                         <div className="w-full text-center">
-                          <h4 className="text-xl font-black text-emerald-600 uppercase tracking-[0.2em] mb-2">Final</h4>
-                          {box(finalM, 999)}
+                          <h4 className="text-3xl font-black text-emerald-600 uppercase tracking-[0.2em] mb-3">Final</h4>
+                          {box(finalM, 999, 'final')}
                         </div>
                         <div className="w-full text-center">
-                          <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Disputa do 3º Lugar</h4>
-                          {box(thirdM, 998)}
+                          <h4 className="text-xs font-black text-zinc-400 uppercase tracking-widest mb-1">Disputa do 3º Lugar</h4>
+                          {box(thirdM, 998, 'third')}
                         </div>
                       </div>
-                      {col('Semifinais', sfR, 'sfr')}
-                      {col('Quartas', qfR, 'qfr')}
-                      {col('Oitavas', r16R, 'r16r')}
-                      {col('2ª Fase', r32R, 'r32r')}
+                      {col('Semifinais', sfR, 'sfr', 'sf')}
+                      {col('Quartas', qfR, 'qfr', 'qf')}
+                      {col('Oitavas', r16R, 'r16r', 'r16')}
+                      {col('2ª Fase', r32R, 'r32r', 'r32')}
                     </div>
                   )}
                 </div>
