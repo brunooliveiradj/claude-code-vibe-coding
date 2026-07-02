@@ -90,10 +90,10 @@ export const isLiveByClock = (m: WCMatch, nowMs: number): boolean => {
 
 // Flag image from an ISO 3166-1 alpha-2 code. Uses flagcdn (standard country
 // flag artwork). UK nations: gb-eng / gb-sct / gb-wls. Swap base if blocked.
-export const flagUrl = (code?: string): string | null => {
+export const flagUrl = (code?: string, size: string = 'w160'): string | null => {
   if (!code) return null;
   const c = code.trim().toLowerCase();
-  return c ? `https://flagcdn.com/w160/${c}.png` : null;
+  return c ? `https://flagcdn.com/${size}/${c}.png` : null;
 };
 
 // --- Country name → ISO code (Portuguese names) -----------------------------

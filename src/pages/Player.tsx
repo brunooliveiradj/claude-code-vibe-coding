@@ -124,15 +124,14 @@ const safeStorage = {
 
 // Country flag: prefers a real flag image (from ISO code) since emoji flags
 // often don't render on Samsung/Tizen TV browsers. Falls back to emoji, then 🏳️.
-const TeamFlag = ({ code, emoji, imgClass, emojiClass }: { code?: string; emoji?: string; imgClass?: string; emojiClass?: string }) => {
+const TeamFlag = ({ code, emoji, imgClass, emojiClass, size }: { code?: string; emoji?: string; imgClass?: string; emojiClass?: string; size?: string }) => {
   const [err, setErr] = useState(false);
-  const url = flagUrl(code);
+  const url = flagUrl(code, size);
   if (url && !err) {
     return (
       <img
         src={url}
         alt=""
-        loading="lazy"
         decoding="async"
         referrerPolicy="no-referrer"
         onError={() => setErr(true)}
@@ -660,6 +659,7 @@ export function Player() {
   const [newsItems, setNewsItems] = useState<any[]>([]);
   const [wcMatches, setWcMatches] = useState<WCMatch[] | null>(null);
   const wcMatchesRef = useRef<WCMatch[] | null>(null);
+  const wcUnsubRef = useRef<null | (() => void)>(null);
   const wcLastBroadRef = useRef(0);
   const wcPrevScoresRef = useRef<Record<string, { h: number; a: number }>>({});
   const [wcGoal, setWcGoal] = useState<{ id: string; side: 'home' | 'away' } | null>(null);
@@ -1047,12 +1047,14 @@ export function Player() {
     }
   }, [currentMedia?.id]);
 
-  // World Cup: subscribe to the shared wc_matches collection (source of truth)
-  // whenever a WC card is on screen. The three cards are just views over it.
+  // World Cup: subscribe to the shared wc_matches collection (source of truth).
+  // Subscribe ONCE (the first time a WC card appears) and keep the listener +
+  // data warm for the rest of the session — so WC cards re-render instantly on
+  // rotation (like the payload-only cards), with no "Carregando" cold start.
   const isWC = currentMedia?.type === 'WC_BRAZIL' || currentMedia?.type === 'WC_TODAY' || currentMedia?.type === 'WC_BRACKET';
   useEffect(() => {
-    if (!isWC) { setWcMatches(null); wcMatchesRef.current = null; return; }
-    const unsub = onSnapshot(collection(db, 'wc_matches'), (snap) => {
+    if (!isWC || wcUnsubRef.current) return; // already subscribed → stay warm
+    wcUnsubRef.current = onSnapshot(collection(db, 'wc_matches'), (snap) => {
       const list = snap.docs.map(d => Object.assign({ id: d.id }, d.data()) as WCMatch);
       wcMatchesRef.current = list;
 
@@ -1077,8 +1079,10 @@ export function Player() {
 
       setWcMatches(list);
     }, (err) => console.error('wc_matches subscription error:', err));
-    return () => unsub();
   }, [isWC]);
+
+  // Detach the warm wc_matches listener only when the Player unmounts.
+  useEffect(() => () => { wcUnsubRef.current?.(); wcUnsubRef.current = null; }, []);
 
   // Tick every 30s so live-by-clock detection and "AO VIVO" stay current.
   useEffect(() => {
@@ -2629,12 +2633,12 @@ export function Player() {
                 return (
                   <div key={key} className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 flex flex-col gap-1 shadow-sm">
                     <div className={`flex items-center gap-1.5 ${w === 2 ? 'opacity-45' : ''}`}>
-                      <TeamFlag code={m.homeCode} emoji={m.homeFlag} imgClass="w-8 h-6" emojiClass="text-base" />
+                      <TeamFlag code={m.homeCode} emoji={m.homeFlag} size="w80" imgClass="w-8 h-6" emojiClass="text-base" />
                       <span className={`text-base font-black ml-auto ${w === 1 ? 'text-emerald-600' : 'text-zinc-900'}`}>{m.homeScore ?? ''}{m.homePens != null ? ` (${m.homePens})` : ''}</span>
                     </div>
                     <div className="h-px bg-zinc-100" />
                     <div className={`flex items-center gap-1.5 ${w === 1 ? 'opacity-45' : ''}`}>
-                      <TeamFlag code={m.awayCode} emoji={m.awayFlag} imgClass="w-8 h-6" emojiClass="text-base" />
+                      <TeamFlag code={m.awayCode} emoji={m.awayFlag} size="w80" imgClass="w-8 h-6" emojiClass="text-base" />
                       <span className={`text-base font-black ml-auto ${w === 2 ? 'text-emerald-600' : 'text-zinc-900'}`}>{m.awayScore ?? ''}{m.awayPens != null ? ` (${m.awayPens})` : ''}</span>
                     </div>
                   </div>
