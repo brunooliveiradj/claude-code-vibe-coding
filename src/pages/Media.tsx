@@ -6,7 +6,7 @@ import { ref, uploadBytesResumable, getDownloadURL, getMetadata } from 'firebase
 import { collection, getDocs, addDoc, deleteDoc, doc, setDoc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { Company } from '../types';
 import { GoogleGenAI } from "@google/genai";
-import { parseBaseImport, parseLooseJson, fetchWcPendingUpdates, matchDocId, WCMatch } from '../lib/worldcup';
+import { parseBaseImport, parseLooseJson, fetchWcPendingUpdates, fetchBrazilCampaign, matchDocId, WCMatch } from '../lib/worldcup';
 import imageCompression from 'browser-image-compression';
 
 type MediaType = 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'WEATHER' | 'NORTH_STAR' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES' | 'WC_BRAZIL' | 'WC_TODAY' | 'WC_BRACKET';
@@ -255,6 +255,25 @@ export function Media() {
     } catch (e: any) {
       console.error('WC pending sync error:', e);
       setWcMsg({ ok: false, text: `Erro ao sincronizar pendentes: ${e?.message || 'tente novamente'}` });
+    } finally {
+      setWcBusy(null);
+    }
+  };
+
+  // One-click: fetch Brazil's full campaign via IA and upsert it, so the
+  // trajectory is complete even if the imported base was missing games.
+  const syncBrazil = async () => {
+    setWcBusy('brazil');
+    setWcMsg(null);
+    try {
+      const games = await fetchBrazilCampaign();
+      if (games.length === 0) { setWcMsg({ ok: false, text: 'A IA não retornou jogos do Brasil. Tente novamente.' }); return; }
+      await Promise.all(games.map(m => setDoc(doc(db, 'wc_matches', m.id!), wcDocData(m), { merge: true })));
+      await loadWcMatches();
+      setWcMsg({ ok: true, text: `✅ Trajetória do Brasil sincronizada (${games.length} jogo(s)).` });
+    } catch (e: any) {
+      console.error('Brazil sync error:', e);
+      setWcMsg({ ok: false, text: `Erro ao sincronizar Brasil: ${e?.message || 'tente novamente'}` });
     } finally {
       setWcBusy(null);
     }
@@ -2050,6 +2069,10 @@ export function Media() {
                           <button type="button" disabled={!!wcBusy} onClick={syncWcPending} className="px-4 py-2 bg-adsplay text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-adsplay-dark transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-adsplay/20">
                             {wcBusy === 'sync' ? <Loader2 className="animate-spin" size={12} /> : <TrendingUp size={12} />}
                             {wcBusy === 'sync' ? 'Buscando...' : 'Sincronizar pendentes (IA)'}
+                          </button>
+                          <button type="button" disabled={!!wcBusy} onClick={syncBrazil} className="px-4 py-2 bg-emerald-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-700 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-emerald-900/20">
+                            {wcBusy === 'brazil' ? <Loader2 className="animate-spin" size={12} /> : <span>🇧🇷</span>}
+                            {wcBusy === 'brazil' ? 'Buscando...' : 'Sincronizar Brasil (IA)'}
                           </button>
                           <button type="button" disabled={!!wcBusy} onClick={loadWcMatches} className="px-4 py-2 bg-white border border-zinc-200 text-zinc-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-zinc-50 transition-all disabled:opacity-50">
                             {wcBusy === 'load' ? 'Carregando...' : 'Recarregar'}

@@ -155,9 +155,10 @@ export const wcResultLetter = (
 const slug = (s: string) =>
   norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
-// Deterministic doc id so re-importing upserts instead of duplicating.
+// Deterministic doc id so re-importing upserts instead of duplicating. The date
+// is slugged too so a stray "/" (e.g. "11/junho") can't break the doc path.
 export const matchDocId = (m: { date?: string; home: string; away: string }) =>
-  `${m.date || 'sd'}__${slug(m.home)}__${slug(m.away)}`;
+  `${slug(m.date || 'sd')}__${slug(m.home)}__${slug(m.away)}`;
 
 const normalizeStatus = (raw: any): WCStatus => {
   const s = norm(String(raw || ''));
@@ -167,10 +168,43 @@ const normalizeStatus = (raw: any): WCStatus => {
   return 'scheduled';
 };
 
-const extractTime = (raw: any): string => {
-  const m = String(raw || '').match(/(\d{1,2}:\d{2})/);
-  return m ? m[1] : '';
+const WC_YEAR = '2026';
+const MONTHS_PT: Record<string, string> = {
+  janeiro: '01', fevereiro: '02', marco: '03', abril: '04', maio: '05', junho: '06',
+  julho: '07', agosto: '08', setembro: '09', outubro: '10', novembro: '11', dezembro: '12',
 };
+
+// Normalize any date the IA might emit into ISO YYYY-MM-DD.
+// Handles "2026-06-11", "11/06", "11/06/2026", "11/junho", "11 de junho".
+const normalizeDate = (raw: any): string => {
+  if (!raw) return '';
+  const s = String(raw).trim();
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  m = /^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/.exec(s);
+  if (m) {
+    const y = m[3] ? (m[3].length === 2 ? `20${m[3]}` : m[3]) : WC_YEAR;
+    return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  }
+  const ns = norm(s); // e.g. "11/junho", "11 de junho"
+  m = /^(\d{1,2})\s*(?:\/|de\s+|\s+)\s*([a-z]+)/.exec(ns);
+  if (m && MONTHS_PT[m[2]]) return `${WC_YEAR}-${MONTHS_PT[m[2]]}-${m[1].padStart(2, '0')}`;
+  return s;
+};
+
+// Normalize any time into HH:MM. Handles "20pm", "03am", "17:30pm", "9h".
+// The source uses 24h numbers, so am/pm suffixes are ignored.
+const normalizeTime = (raw: any): string => {
+  if (!raw) return '';
+  const m = /(\d{1,2})(?::(\d{2}))?/.exec(String(raw));
+  if (!m) return '';
+  let h = parseInt(m[1], 10);
+  if (isNaN(h)) return '';
+  if (h > 23) h = h % 24;
+  return `${String(h).padStart(2, '0')}:${m[2] || '00'}`;
+};
+
+const extractTime = (raw: any): string => normalizeTime(raw);
 
 const numOrNull = (v: any): number | null =>
   v === null || v === undefined || v === '' ? null : Number(v);
@@ -232,12 +266,12 @@ export function normalizeMatchItem(item: any): WCMatch | null {
   const home = item.home ?? item.equipe_casa ?? item.mandante;
   const away = item.away ?? item.equipe_visitante ?? item.visitante;
   if (!home || !away) return null;
-  const date = item.date ?? item.data ?? '';
+  const date = normalizeDate(item.date ?? item.data ?? '');
   const stage = item.stage ?? item.fase ?? '';
   return {
     date,
     stage,
-    time: item.time ?? item.hora ?? item.horario ?? extractTime(item.status) ?? '',
+    time: normalizeTime(item.time ?? item.hora ?? item.horario) || extractTime(item.status),
     home: String(home),
     away: String(away),
     homeCode: item.homeCode ?? item.codigo_casa ?? codeForCountry(String(home)),
@@ -388,4 +422,32 @@ Retorne APENAS um JSON:
   return (Array.isArray(arr) ? arr : [])
     .map(normalizeMatchItem)
     .filter((m): m is WCMatch => !!m);
+}
+
+// Asks Gemini (Google Search) for Brazil's FULL campaign — every match already
+// played (group stage + knockout), in order, plus the next match if defined.
+// Used to complete the Brazil trajectory in one click.
+export async function fetchBrazilCampaign(): Promise<WCMatch[]> {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const now = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+
+  const prompt = `Você é um assistente de dados esportivos. Use a BUSCA DO GOOGLE para consultar dados REAIS da Copa do Mundo FIFA 2026. Hoje é ${now} (horário de Brasília). NUNCA invente resultados.
+Liste TODOS os jogos da SELEÇÃO BRASILEIRA MASCULINA nesta Copa: todos os jogos JÁ realizados (fase de grupos e mata-mata), em ORDEM CRONOLÓGICA, e também o PRÓXIMO jogo se já estiver definido. Sempre o Brasil como uma das equipes.
+Datas em "AAAA-MM-DD", horário em "HH:MM" (Brasília). Placar null se não terminou. Pênaltis só se decidido nos pênaltis. status = "Encerrado" | "Em andamento" | "Agendado".
+Código ISO 3166-1 alpha-2 de cada seleção (Brasil="br").
+Retorne APENAS um JSON:
+{ "matches": [ { "home": "Time", "homeCode": "iso", "away": "Time", "awayCode": "iso", "date": "AAAA-MM-DD", "time": "HH:MM", "stage": "Fase", "homeScore": number|null, "awayScore": number|null, "homePens": number|null, "awayPens": number|null, "status": "..." } ] }`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: prompt,
+    config: { tools: [{ googleSearch: {} }] },
+  });
+
+  const data = parseLooseJson(response.text || '');
+  const arr = data?.matches ?? (Array.isArray(data) ? data : []);
+  return (Array.isArray(arr) ? arr : [])
+    .map(normalizeMatchItem)
+    .filter((m): m is WCMatch => !!m)
+    .filter(m => isBrazil(m.home) || isBrazil(m.away));
 }
