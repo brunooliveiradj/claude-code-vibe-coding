@@ -2443,68 +2443,68 @@ export function Player() {
               const next = wcBrazil.nextMatch;
               const loading = wcMatches === null;
               return (
-                <div className="w-full h-full bg-gradient-to-br from-[#00401f] via-[#003d1a] to-[#0a0a0a] flex flex-col p-16 gap-10 relative overflow-hidden">
-                  <div className="absolute -top-1/4 right-0 w-[45vw] h-[45vw] bg-yellow-400/10 blur-[130px] rounded-full pointer-events-none" />
-                  <div className="flex items-center gap-5 relative z-10">
-                    <TeamFlag code="br" imgClass="w-20 h-14" emojiClass="text-7xl" />
+                <div className="w-full h-full bg-gradient-to-b from-white to-zinc-100 flex flex-col p-16 gap-10 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 right-0 h-3 bg-gradient-to-r from-emerald-500 via-yellow-400 to-emerald-500" />
+                  <div className="flex items-center gap-6 relative z-10">
+                    <TeamFlag code="br" imgClass="w-24 h-16" emojiClass="text-8xl" />
                     <div>
-                      <h2 className="text-6xl font-black text-white tracking-tighter leading-none">Seleção Brasileira</h2>
-                      <p className="text-yellow-400 font-black uppercase tracking-[0.3em] text-sm mt-2">Copa do Mundo FIFA 2026</p>
+                      <h2 className="text-7xl font-black text-zinc-900 tracking-tighter leading-none">Seleção Brasileira</h2>
+                      <p className="text-emerald-600 font-black uppercase tracking-[0.3em] text-lg mt-3">Copa do Mundo FIFA 2026</p>
                     </div>
                   </div>
 
                   {loading ? (
-                    <div className="flex-1 flex items-center justify-center text-zinc-500 text-2xl font-bold">Carregando dados da Copa...</div>
+                    <div className="flex-1 flex items-center justify-center text-zinc-400 text-3xl font-bold">Carregando dados da Copa...</div>
                   ) : (
                     <div className="flex-1 grid grid-cols-12 gap-10 relative z-10 min-h-0">
                       <div className="col-span-5 flex flex-col">
-                        <h3 className="text-yellow-400 text-lg font-black uppercase tracking-[0.3em] mb-5">Próximo Jogo</h3>
+                        <h3 className="text-emerald-600 text-2xl font-black uppercase tracking-[0.25em] mb-5">Próximo Jogo</h3>
                         {next ? (
-                          <div className="flex-1 bg-white/5 border border-white/10 rounded-[2.5rem] p-10 flex flex-col justify-center gap-8">
-                            <div className="flex items-center justify-center gap-8">
-                              <div className="flex flex-col items-center gap-3">
-                                <TeamFlag code="br" imgClass="w-24 h-16" emojiClass="text-7xl" />
-                                <span className="text-2xl font-black text-white">BRASIL</span>
+                          <div className="flex-1 bg-white border-2 border-emerald-100 rounded-[2.5rem] p-10 flex flex-col justify-center gap-10 shadow-xl shadow-emerald-900/5">
+                            <div className="flex items-center justify-center gap-10">
+                              <div className="flex flex-col items-center gap-4">
+                                <TeamFlag code="br" imgClass="w-32 h-20" emojiClass="text-8xl" />
+                                <span className="text-3xl font-black text-zinc-900">BRASIL</span>
                               </div>
-                              <span className="text-4xl font-black text-zinc-500">×</span>
-                              <div className="flex flex-col items-center gap-3">
-                                <TeamFlag code={next.opponentCode} emoji={next.opponentFlag} imgClass="w-24 h-16" emojiClass="text-7xl" />
-                                <span className="text-2xl font-black text-white text-center">{(next.opponent || 'A definir').toUpperCase()}</span>
+                              <span className="text-5xl font-black text-zinc-300">×</span>
+                              <div className="flex flex-col items-center gap-4">
+                                <TeamFlag code={next.opponentCode} emoji={next.opponentFlag} imgClass="w-32 h-20" emojiClass="text-8xl" />
+                                <span className="text-3xl font-black text-zinc-900 text-center">{(next.opponent || 'A definir').toUpperCase()}</span>
                               </div>
                             </div>
-                            <div className="flex flex-col items-center gap-2 text-center">
-                              {next.stage && <span className="px-4 py-1.5 bg-yellow-400/20 text-yellow-300 rounded-full text-xs font-black uppercase tracking-widest">{next.stage}</span>}
-                              <p className="text-3xl font-black text-white">{next.date}{next.time ? ` · ${next.time}` : ''}</p>
-                              {next.venue && <p className="text-zinc-400 font-bold">{next.venue}</p>}
+                            <div className="flex flex-col items-center gap-3 text-center">
+                              {next.stage && <span className="px-5 py-2 bg-emerald-500 text-white rounded-full text-sm font-black uppercase tracking-widest">{next.stage}</span>}
+                              <p className="text-5xl font-black text-zinc-900">{next.date}{next.time ? ` · ${next.time}` : ''}</p>
+                              {next.venue && <p className="text-xl text-zinc-500 font-bold">{next.venue}</p>}
                             </div>
                           </div>
                         ) : (
-                          <div className="flex-1 bg-white/5 border border-white/10 rounded-[2.5rem] p-10 flex items-center justify-center text-center text-zinc-400 text-xl font-bold">Sem jogo agendado</div>
+                          <div className="flex-1 bg-white border-2 border-zinc-100 rounded-[2.5rem] p-10 flex items-center justify-center text-center text-zinc-400 text-2xl font-bold">Sem jogo agendado</div>
                         )}
                       </div>
 
                       <div className="col-span-7 flex flex-col min-h-0">
-                        <h3 className="text-yellow-400 text-lg font-black uppercase tracking-[0.3em] mb-5">Trajetória</h3>
+                        <h3 className="text-emerald-600 text-2xl font-black uppercase tracking-[0.25em] mb-5">Trajetória</h3>
                         <div className="flex-1 space-y-3 overflow-hidden">
                           {results.length === 0 ? (
-                            <div className="h-full flex items-center justify-center text-zinc-500 text-xl font-bold">A seleção ainda não estreou</div>
-                          ) : results.slice(0, 8).map((r: any, i: number) => {
+                            <div className="h-full flex items-center justify-center text-zinc-400 text-2xl font-bold">A seleção ainda não estreou</div>
+                          ) : results.slice(0, 7).map((r: any, i: number) => {
                             const letter = wcResultLetter(Number(r.brScore) || 0, Number(r.advScore) || 0, r.brPens, r.advPens);
-                            const color = letter === 'V' ? 'bg-emerald-500' : letter === 'D' ? 'bg-rose-500' : 'bg-zinc-500';
+                            const color = letter === 'V' ? 'bg-emerald-500' : letter === 'D' ? 'bg-rose-500' : 'bg-zinc-400';
                             const hasPens = r.brPens != null && r.advPens != null;
                             return (
-                              <div key={i} className="bg-white/5 border border-white/10 rounded-2xl px-6 py-4 flex items-center gap-5">
-                                <div className={`w-10 h-10 rounded-xl ${color} flex items-center justify-center text-white font-black text-lg shrink-0`}>{letter}</div>
+                              <div key={i} className="bg-white border border-zinc-200 rounded-2xl px-6 py-4 flex items-center gap-5 shadow-sm">
+                                <div className={`w-12 h-12 rounded-xl ${color} flex items-center justify-center text-white font-black text-xl shrink-0`}>{letter}</div>
                                 <div className="flex-1 flex items-center gap-3 min-w-0">
-                                  <TeamFlag code="br" imgClass="w-8 h-6" emojiClass="text-2xl" />
-                                  <span className="text-2xl font-black text-white">{Number(r.brScore) || 0}</span>
-                                  <span className="text-zinc-500 font-black">×</span>
-                                  <span className="text-2xl font-black text-white">{Number(r.advScore) || 0}</span>
-                                  {hasPens && <span className="text-xs font-black text-yellow-400 shrink-0">({r.brPens}-{r.advPens} pên)</span>}
-                                  <TeamFlag code={r.opponentCode} emoji={r.opponentFlag} imgClass="w-8 h-6" emojiClass="text-2xl" />
-                                  <span className="text-xl font-bold text-zinc-200 truncate">{r.opponent}</span>
+                                  <TeamFlag code="br" imgClass="w-10 h-7" emojiClass="text-3xl" />
+                                  <span className="text-3xl font-black text-zinc-900">{Number(r.brScore) || 0}</span>
+                                  <span className="text-zinc-400 font-black text-2xl">×</span>
+                                  <span className="text-3xl font-black text-zinc-900">{Number(r.advScore) || 0}</span>
+                                  {hasPens && <span className="text-sm font-black text-emerald-600 shrink-0">({r.brPens}-{r.advPens} pên)</span>}
+                                  <TeamFlag code={r.opponentCode} emoji={r.opponentFlag} imgClass="w-10 h-7" emojiClass="text-3xl" />
+                                  <span className="text-2xl font-bold text-zinc-700 truncate">{r.opponent}</span>
                                 </div>
-                                {r.stage && <span className="text-[11px] font-black text-zinc-500 uppercase tracking-widest shrink-0">{r.stage}</span>}
+                                {r.stage && <span className="text-xs font-black text-zinc-400 uppercase tracking-widest shrink-0">{r.stage}</span>}
                               </div>
                             );
                           })}
@@ -2524,30 +2524,30 @@ export function Player() {
               const showScore = (m: any) => m.homeScore != null && m.awayScore != null;
               const liveNow = (m: any) => isLiveByClock(m, nowMs);
               const badge = (m: any) => {
-                if (m.status === 'finished') return <span className="px-3 py-1 bg-zinc-700 text-zinc-300 rounded-full text-xs font-black uppercase tracking-widest">Encerrado</span>;
-                if (liveNow(m)) return <span className="px-3 py-1 bg-rose-500 text-white rounded-full text-xs font-black uppercase tracking-widest flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />Ao Vivo</span>;
-                return <span className="px-3 py-1 bg-white/10 text-white rounded-full text-xs font-black uppercase tracking-widest">{m.time || '—'}</span>;
+                if (m.status === 'finished') return <span className="px-4 py-1.5 bg-zinc-200 text-zinc-600 rounded-full text-sm font-black uppercase tracking-widest">Encerrado</span>;
+                if (liveNow(m)) return <span className="px-4 py-1.5 bg-rose-500 text-white rounded-full text-sm font-black uppercase tracking-widest flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-white animate-pulse" />Ao Vivo</span>;
+                return <span className="px-4 py-1.5 bg-zinc-900 text-white rounded-full text-sm font-black uppercase tracking-widest">{m.time || '—'}</span>;
               };
               return (
-                <div className="w-full h-full bg-gradient-to-br from-[#0a0f2c] via-[#0a0a1f] to-[#050505] flex flex-col p-16 gap-8 relative overflow-hidden">
-                  <div className="absolute -top-1/4 left-0 w-[45vw] h-[45vw] bg-adsplay/10 blur-[140px] rounded-full pointer-events-none" />
+                <div className="w-full h-full bg-gradient-to-b from-white to-zinc-100 flex flex-col p-16 gap-8 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 right-0 h-3 bg-adsplay" />
                   <div className="flex items-center justify-between relative z-10">
                     <div className="flex items-center gap-5">
-                      <div className="w-16 h-16 bg-adsplay/20 rounded-2xl flex items-center justify-center text-adsplay"><Calendar size={32} /></div>
+                      <div className="w-20 h-20 bg-adsplay/10 rounded-2xl flex items-center justify-center text-adsplay"><Calendar size={40} /></div>
                       <div>
-                        <h2 className="text-6xl font-black text-white tracking-tighter leading-none">Jogos de Hoje</h2>
-                        <p className="text-adsplay font-black uppercase tracking-[0.3em] text-sm mt-2 capitalize">{today}</p>
+                        <h2 className="text-7xl font-black text-zinc-900 tracking-tighter leading-none">Jogos de Hoje</h2>
+                        <p className="text-adsplay font-black uppercase tracking-[0.3em] text-lg mt-2 capitalize">{today}</p>
                       </div>
                     </div>
-                    <span className="text-sm font-black uppercase tracking-[0.3em] text-zinc-500">Copa FIFA 2026</span>
+                    <span className="text-lg font-black uppercase tracking-[0.3em] text-zinc-400">Copa FIFA 2026</span>
                   </div>
 
                   {loading ? (
-                    <div className="flex-1 flex items-center justify-center text-zinc-500 text-2xl font-bold">Carregando jogos de hoje...</div>
+                    <div className="flex-1 flex items-center justify-center text-zinc-400 text-3xl font-bold">Carregando jogos de hoje...</div>
                   ) : matches.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center gap-4 text-zinc-500">
-                      <Calendar size={80} className="text-zinc-800" />
-                      <p className="text-3xl font-black">Nenhum jogo hoje</p>
+                    <div className="flex-1 flex flex-col items-center justify-center gap-4">
+                      <Calendar size={90} className="text-zinc-200" />
+                      <p className="text-4xl font-black text-zinc-400">Nenhum jogo hoje</p>
                     </div>
                   ) : (
                     <div className={`flex-1 grid gap-5 relative z-10 min-h-0 ${matches.length > 4 ? 'grid-cols-2 content-start' : 'grid-cols-1'}`}>
@@ -2555,36 +2555,36 @@ export function Player() {
                         const isLive = liveNow(m);
                         const scored = wcGoal && wcGoal.id === m.id;
                         return (
-                          <div key={m.id} className={`relative rounded-[2rem] px-8 py-6 flex items-center gap-6 border transition-colors ${isLive ? 'bg-rose-950/40 border-rose-500/40' : 'bg-white/5 border-white/10'}`}>
+                          <div key={m.id} className={`relative rounded-[2rem] px-8 py-6 flex items-center gap-6 border-2 shadow-sm transition-colors ${isLive ? 'bg-rose-50 border-rose-300' : 'bg-white border-zinc-200'}`}>
                             {scored && (
                               <motion.div
                                 initial={{ opacity: 0, scale: 0.6, y: 6 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 transition={{ type: 'spring', stiffness: 400, damping: 18 }}
-                                className="absolute -top-3 left-1/2 -translate-x-1/2 z-20 px-4 py-1.5 bg-emerald-500 text-white rounded-full text-sm font-black uppercase tracking-widest shadow-lg shadow-emerald-500/30"
+                                className="absolute -top-4 left-1/2 -translate-x-1/2 z-20 px-5 py-2 bg-emerald-500 text-white rounded-full text-lg font-black uppercase tracking-widest shadow-lg shadow-emerald-500/30"
                                 style={{ willChange: 'transform, opacity' }}
                               >
                                 ⚽ Gol!
                               </motion.div>
                             )}
                             <div className="flex-1 flex items-center justify-end gap-4 min-w-0">
-                              <span className={`text-2xl font-black truncate text-right ${scored && wcGoal!.side === 'home' ? 'text-emerald-400' : 'text-white'}`}>{(m.home || '').toUpperCase()}</span>
-                              <TeamFlag code={m.homeCode} emoji={m.homeFlag} imgClass="w-16 h-11" emojiClass="text-5xl" />
+                              <span className={`text-3xl font-black truncate text-right ${scored && wcGoal!.side === 'home' ? 'text-emerald-600' : 'text-zinc-900'}`}>{(m.home || '').toUpperCase()}</span>
+                              <TeamFlag code={m.homeCode} emoji={m.homeFlag} imgClass="w-20 h-14" emojiClass="text-6xl" />
                             </div>
-                            <div className="flex flex-col items-center gap-2 shrink-0 min-w-[130px]">
+                            <div className="flex flex-col items-center gap-2 shrink-0 min-w-[150px]">
                               {showScore(m) ? (
-                                <span className="text-4xl font-black text-white">{m.homeScore} <span className="text-zinc-600">×</span> {m.awayScore}</span>
+                                <span className="text-6xl font-black text-zinc-900">{m.homeScore} <span className="text-zinc-300">×</span> {m.awayScore}</span>
                               ) : (
-                                <span className="text-3xl font-black text-zinc-500">×</span>
+                                <span className="text-4xl font-black text-zinc-300">×</span>
                               )}
                               {m.homePens != null && m.awayPens != null && (
-                                <span className="text-xs font-black text-yellow-400">({m.homePens}-{m.awayPens} nos pênaltis)</span>
+                                <span className="text-sm font-black text-emerald-600">({m.homePens}-{m.awayPens} nos pênaltis)</span>
                               )}
                               {badge(m)}
                             </div>
                             <div className="flex-1 flex items-center gap-4 min-w-0">
-                              <TeamFlag code={m.awayCode} emoji={m.awayFlag} imgClass="w-16 h-11" emojiClass="text-5xl" />
-                              <span className={`text-2xl font-black truncate ${scored && wcGoal!.side === 'away' ? 'text-emerald-400' : 'text-white'}`}>{(m.away || '').toUpperCase()}</span>
+                              <TeamFlag code={m.awayCode} emoji={m.awayFlag} imgClass="w-20 h-14" emojiClass="text-6xl" />
+                              <span className={`text-3xl font-black truncate ${scored && wcGoal!.side === 'away' ? 'text-emerald-600' : 'text-zinc-900'}`}>{(m.away || '').toUpperCase()}</span>
                             </div>
                           </div>
                         );
@@ -2624,17 +2624,18 @@ export function Player() {
               const thirdM = roundMatches(5)[0] || null;
 
               const box = (m: any, key: number) => {
-                if (!m) return <div key={key} className="rounded-md border border-dashed border-white/10 min-h-[2.6rem]" />;
+                if (!m) return <div key={key} className="rounded-lg border border-dashed border-zinc-200 bg-zinc-50/60 min-h-[3rem]" />;
                 const w = winner(m);
                 return (
-                  <div key={key} className="rounded-md border border-white/10 bg-white/5 px-1.5 py-1 flex flex-col gap-0.5">
-                    <div className={`flex items-center gap-1.5 ${w === 2 ? 'opacity-40' : ''}`}>
-                      <TeamFlag code={m.homeCode} emoji={m.homeFlag} imgClass="w-7 h-5" emojiClass="text-sm" />
-                      <span className="text-[11px] font-black text-white ml-auto">{m.homeScore ?? ''}{m.homePens != null ? ` (${m.homePens})` : ''}</span>
+                  <div key={key} className="rounded-lg border border-zinc-200 bg-white px-2 py-1.5 flex flex-col gap-1 shadow-sm">
+                    <div className={`flex items-center gap-1.5 ${w === 2 ? 'opacity-45' : ''}`}>
+                      <TeamFlag code={m.homeCode} emoji={m.homeFlag} imgClass="w-8 h-6" emojiClass="text-base" />
+                      <span className={`text-base font-black ml-auto ${w === 1 ? 'text-emerald-600' : 'text-zinc-900'}`}>{m.homeScore ?? ''}{m.homePens != null ? ` (${m.homePens})` : ''}</span>
                     </div>
-                    <div className={`flex items-center gap-1.5 ${w === 1 ? 'opacity-40' : ''}`}>
-                      <TeamFlag code={m.awayCode} emoji={m.awayFlag} imgClass="w-7 h-5" emojiClass="text-sm" />
-                      <span className="text-[11px] font-black text-white ml-auto">{m.awayScore ?? ''}{m.awayPens != null ? ` (${m.awayPens})` : ''}</span>
+                    <div className="h-px bg-zinc-100" />
+                    <div className={`flex items-center gap-1.5 ${w === 1 ? 'opacity-45' : ''}`}>
+                      <TeamFlag code={m.awayCode} emoji={m.awayFlag} imgClass="w-8 h-6" emojiClass="text-base" />
+                      <span className={`text-base font-black ml-auto ${w === 2 ? 'text-emerald-600' : 'text-zinc-900'}`}>{m.awayScore ?? ''}{m.awayPens != null ? ` (${m.awayPens})` : ''}</span>
                     </div>
                   </div>
                 );
@@ -2642,41 +2643,41 @@ export function Player() {
 
               const col = (label: string, boxes: any[], k: string) => (
                 <div key={k} className="flex-1 flex flex-col min-w-0">
-                  <h4 className="text-[9px] font-black text-yellow-400/80 uppercase tracking-widest text-center mb-2 truncate">{label}</h4>
-                  <div className="flex-1 flex flex-col justify-around gap-1">
+                  <h4 className="text-[11px] font-black text-emerald-600 uppercase tracking-widest text-center mb-3 truncate">{label}</h4>
+                  <div className="flex-1 flex flex-col justify-around gap-1.5">
                     {boxes.map((m, i) => box(m, i))}
                   </div>
                 </div>
               );
 
               return (
-                <div className="w-full h-full bg-gradient-to-br from-[#1a0a2e] via-[#0f0a1f] to-[#050505] flex flex-col p-10 gap-4 relative overflow-hidden">
-                  <div className="absolute -top-1/4 right-0 w-[45vw] h-[45vw] bg-yellow-400/10 blur-[130px] rounded-full pointer-events-none" />
+                <div className="w-full h-full bg-gradient-to-b from-white to-zinc-100 flex flex-col p-10 gap-5 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 right-0 h-3 bg-gradient-to-r from-emerald-500 via-yellow-400 to-emerald-500" />
                   <div className="text-center relative z-10">
-                    <h2 className="text-5xl font-black text-white tracking-tighter leading-none">Caminho até a Final</h2>
-                    <p className="text-yellow-400 font-black uppercase tracking-[0.3em] text-xs mt-2">Copa do Mundo FIFA 2026 · Mata-Mata</p>
+                    <h2 className="text-6xl font-black text-zinc-900 tracking-tighter leading-none">Caminho até a Final</h2>
+                    <p className="text-emerald-600 font-black uppercase tracking-[0.3em] text-sm mt-2">Copa do Mundo FIFA 2026 · Mata-Mata</p>
                   </div>
 
                   {loading ? (
-                    <div className="flex-1 flex items-center justify-center text-zinc-500 text-2xl font-bold">Carregando chaveamento...</div>
+                    <div className="flex-1 flex items-center justify-center text-zinc-400 text-2xl font-bold">Carregando chaveamento...</div>
                   ) : rounds.length === 0 ? (
-                    <div className="flex-1 flex flex-col items-center justify-center gap-4 text-zinc-500">
-                      <Trophy size={80} className="text-zinc-800" />
-                      <p className="text-3xl font-black">Mata-mata ainda não começou</p>
+                    <div className="flex-1 flex flex-col items-center justify-center gap-4">
+                      <Trophy size={80} className="text-zinc-200" />
+                      <p className="text-3xl font-black text-zinc-400">Mata-mata ainda não começou</p>
                     </div>
                   ) : (
-                    <div className="flex-1 flex items-stretch gap-2 relative z-10 min-h-0">
+                    <div className="flex-1 flex items-stretch gap-3 relative z-10 min-h-0">
                       {col('2ª Fase', r32L, 'r32l')}
                       {col('Oitavas', r16L, 'r16l')}
                       {col('Quartas', qfL, 'qfl')}
                       {col('Semifinais', sfL, 'sfl')}
-                      <div className="flex flex-col items-center justify-center gap-6 px-1 shrink-0" style={{ flexBasis: '150px' }}>
+                      <div className="flex flex-col items-center justify-center gap-6 px-1 shrink-0" style={{ flexBasis: '170px' }}>
                         <div className="w-full text-center">
-                          <h4 className="text-base font-black text-yellow-400 uppercase tracking-[0.2em] mb-2">Final</h4>
+                          <h4 className="text-xl font-black text-emerald-600 uppercase tracking-[0.2em] mb-2">Final</h4>
                           {box(finalM, 999)}
                         </div>
                         <div className="w-full text-center">
-                          <h4 className="text-[8px] font-black text-zinc-500 uppercase tracking-widest mb-1">Disputa do 3º Lugar</h4>
+                          <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Disputa do 3º Lugar</h4>
                           {box(thirdM, 998)}
                         </div>
                       </div>
