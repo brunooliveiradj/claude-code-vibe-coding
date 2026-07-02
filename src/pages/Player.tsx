@@ -2623,19 +2623,20 @@ export function Player() {
               const thirdM = roundMatches(5)[0] || null;
 
               // Flags grow round by round: fewer teams left → more emphasis.
-              const TIER: Record<string, { flag: string; score: string; size: string; pad: string; gap: string; min: string }> = {
-                r32:   { flag: 'w-8 h-6',   score: 'text-base', size: 'w80',  pad: 'px-2 py-1.5', gap: 'gap-1.5', min: 'min-h-[3rem]' },
-                r16:   { flag: 'w-11 h-8',  score: 'text-xl',   size: 'w160', pad: 'px-3 py-2',   gap: 'gap-2',   min: 'min-h-[3.5rem]' },
-                qf:    { flag: 'w-14 h-10', score: 'text-2xl',  size: 'w160', pad: 'px-4 py-3',   gap: 'gap-2.5', min: 'min-h-[4.5rem]' },
-                sf:    { flag: 'w-20 h-14', score: 'text-4xl',  size: 'w320', pad: 'px-5 py-4',   gap: 'gap-3',   min: 'min-h-[6rem]' },
-                final: { flag: 'w-28 h-20', score: 'text-6xl',  size: 'w320', pad: 'px-6 py-6',   gap: 'gap-4',   min: 'min-h-[8rem]' },
-                third: { flag: 'w-14 h-10', score: 'text-2xl',  size: 'w160', pad: 'px-4 py-3',   gap: 'gap-2.5', min: 'min-h-[4.5rem]' },
+              const TIER: Record<string, { flag: string; score: string; size: string; pad: string; gap: string; min: string; foot: string }> = {
+                r32:   { flag: 'w-8 h-6',   score: 'text-base', size: 'w80',  pad: 'px-2 py-1.5', gap: 'gap-1.5', min: 'min-h-[3rem]',    foot: 'text-[9px]' },
+                r16:   { flag: 'w-11 h-8',  score: 'text-xl',   size: 'w160', pad: 'px-3 py-2',   gap: 'gap-2',   min: 'min-h-[3.5rem]',  foot: 'text-[10px]' },
+                qf:    { flag: 'w-14 h-10', score: 'text-2xl',  size: 'w160', pad: 'px-4 py-3',   gap: 'gap-2.5', min: 'min-h-[4.5rem]',  foot: 'text-xs' },
+                sf:    { flag: 'w-20 h-14', score: 'text-4xl',  size: 'w320', pad: 'px-5 py-4',   gap: 'gap-3',   min: 'min-h-[6rem]',    foot: 'text-sm' },
+                final: { flag: 'w-28 h-20', score: 'text-6xl',  size: 'w320', pad: 'px-6 py-6',   gap: 'gap-4',   min: 'min-h-[8rem]',    foot: 'text-base' },
+                third: { flag: 'w-14 h-10', score: 'text-2xl',  size: 'w160', pad: 'px-4 py-3',   gap: 'gap-2.5', min: 'min-h-[4.5rem]',  foot: 'text-xs' },
               };
               const box = (m: any, key: number, tier: string = 'r32') => {
                 const t = TIER[tier] || TIER.r32;
                 const emphasize = tier === 'sf' || tier === 'final';
                 if (!m) return <div key={key} className={`rounded-xl border border-dashed border-zinc-200 bg-zinc-50/60 ${t.min}`} />;
                 const w = winner(m);
+                const when = `${fmtBrDate(m.date)}${m.time ? ` · ${m.time}` : ''}`.trim();
                 return (
                   <div key={key} className={`rounded-xl border bg-white ${t.pad} flex flex-col ${t.gap} shadow-sm ${emphasize ? 'border-emerald-300 shadow-emerald-900/10' : 'border-zinc-200'}`}>
                     <div className={`flex items-center ${t.gap} ${w === 2 ? 'opacity-45' : ''}`}>
@@ -2647,6 +2648,9 @@ export function Player() {
                       <TeamFlag code={m.awayCode} emoji={m.awayFlag} size={t.size} imgClass={t.flag} emojiClass={t.score} />
                       <span className={`${t.score} font-black ml-auto ${w === 2 ? 'text-emerald-600' : 'text-zinc-900'}`}>{m.awayScore ?? ''}{m.awayPens != null ? ` (${m.awayPens})` : ''}</span>
                     </div>
+                    {when && m.status !== 'finished' && (
+                      <div className={`text-center ${t.foot} font-bold text-zinc-400 pt-0.5`}>{when} · Brasília</div>
+                    )}
                   </div>
                 );
               };

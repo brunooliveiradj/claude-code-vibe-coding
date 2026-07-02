@@ -237,7 +237,7 @@ export function normalizeMatchItem(item: any): WCMatch | null {
   return {
     date,
     stage,
-    time: item.time ?? extractTime(item.status) ?? '',
+    time: item.time ?? item.hora ?? item.horario ?? extractTime(item.status) ?? '',
     home: String(home),
     away: String(away),
     homeCode: item.homeCode ?? item.codigo_casa ?? codeForCountry(String(home)),
