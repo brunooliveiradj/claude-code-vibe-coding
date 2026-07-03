@@ -182,13 +182,18 @@ export function Media() {
 
   // Pull fresh World Cup data via IA into the form for review/editing (hybrid).
   // --- World Cup: shared `wc_matches` collection (single source of truth) ----
-  const wcDocData = (m: WCMatch) => ({
-    date: m.date || '', time: m.time || '', stage: m.stage || '',
-    home: m.home, away: m.away, homeCode: m.homeCode || '', awayCode: m.awayCode || '',
-    homeScore: m.homeScore ?? null, awayScore: m.awayScore ?? null,
-    homePens: m.homePens ?? null, awayPens: m.awayPens ?? null,
-    status: m.status || 'scheduled', updatedAt: serverTimestamp(),
-  });
+  const wcDocData = (m: WCMatch) => {
+    const data: any = {
+      date: m.date || '', time: m.time || '', stage: m.stage || '',
+      home: m.home, away: m.away, homeCode: m.homeCode || '', awayCode: m.awayCode || '',
+      homeScore: m.homeScore ?? null, awayScore: m.awayScore ?? null,
+      homePens: m.homePens ?? null, awayPens: m.awayPens ?? null,
+      status: m.status || 'scheduled', updatedAt: serverTimestamp(),
+    };
+    // Only write bracket order when known, so IA merges don't wipe it.
+    if (typeof m.order === 'number' && !isNaN(m.order)) data.order = m.order;
+    return data;
+  };
 
   const loadWcMatches = async () => {
     setWcBusy('load');

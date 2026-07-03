@@ -28,6 +28,7 @@ export interface WCMatch {
   homePens?: number | null; // penalty shootout goals (knockout only)
   awayPens?: number | null;
   status?: WCStatus;
+  order?: number; // bracket order (from id_jogo) — drives knockout tree layout
 }
 
 export interface WCBrazilResult {
@@ -281,6 +282,7 @@ export function normalizeMatchItem(item: any): WCMatch | null {
     homePens: numOrNull(item.homePens ?? item.penaltis_casa),
     awayPens: numOrNull(item.awayPens ?? item.penaltis_visitante),
     status: normalizeStatus(item.status),
+    order: numOrNull(item.order ?? item.id_jogo ?? item.ordem) ?? undefined,
     id: matchDocId({ date, home: String(home), away: String(away) }),
   };
 }
@@ -318,6 +320,16 @@ export function parseBaseImport(text: string): WCMatch[] {
 
 const byDateAsc = (a: WCMatch, b: WCMatch) =>
   `${a.date || ''} ${a.time || ''}`.localeCompare(`${b.date || ''} ${b.time || ''}`);
+
+// Knockout matches are laid out by their bracket order (id_jogo). This is the
+// tournament tree order — 73-80 = left half, 81-88 = right half, etc. — so the
+// left/right split and per-round positions match the real bracket. Falls back
+// to date when no order is present.
+const byBracketOrder = (a: WCMatch, b: WCMatch) => {
+  const ao = a.order ?? Number.MAX_SAFE_INTEGER;
+  const bo = b.order ?? Number.MAX_SAFE_INTEGER;
+  return ao !== bo ? ao - bo : byDateAsc(a, b);
+};
 
 // Two imports with different name spellings for the same fixture (e.g.
 // "Congo DR" vs "República Democrática do Congo") create separate docs.
@@ -385,7 +397,7 @@ export function deriveBracket(matches: WCMatch[]): WCBracketRound[] {
   });
   return Object.keys(byStage)
     .sort((a, b) => knockoutOrder(a) - knockoutOrder(b))
-    .map(name => ({ name, matches: byStage[name].sort(byDateAsc) }));
+    .map(name => ({ name, matches: byStage[name].sort(byBracketOrder) }));
 }
 
 // --- IA: update ONLY pending/future games (never rewrite finished) ----------
