@@ -388,10 +388,51 @@ export function deriveToday(matches: WCMatch[], todayISO: string): WCMatch[] {
   return dedupeMatches(matches).filter(m => m.date === todayISO).sort(byDateAsc);
 }
 
+// Which side won a finished match (1 = home, 2 = away, 0 = undecided).
+const winnerSide = (m: WCMatch): 0 | 1 | 2 => {
+  if (m.status !== 'finished' || m.homeScore == null || m.awayScore == null) return 0;
+  if (m.homeScore > m.awayScore) return 1;
+  if (m.awayScore > m.homeScore) return 2;
+  if (m.homePens != null && m.awayPens != null) {
+    if (m.homePens > m.awayPens) return 1;
+    if (m.awayPens > m.homePens) return 2;
+  }
+  return 0;
+};
+
 export function deriveBracket(matches: WCMatch[]): WCBracketRound[] {
   const ko = dedupeMatches(matches).filter(m => isKnockoutStage(m.stage));
+
+  // Build winner/loser per game order, so downstream slots that reference
+  // "Vencedor do Jogo N" / "Perdedor do Jogo N" resolve to the real team +
+  // flag as soon as game N finishes (bracket propagates itself).
+  const winnerBy = new Map<number, { name: string; code?: string }>();
+  const loserBy = new Map<number, { name: string; code?: string }>();
+  for (const m of ko) {
+    if (m.order == null) continue;
+    const w = winnerSide(m);
+    if (w === 1) { winnerBy.set(m.order, { name: m.home, code: m.homeCode }); loserBy.set(m.order, { name: m.away, code: m.awayCode }); }
+    else if (w === 2) { winnerBy.set(m.order, { name: m.away, code: m.awayCode }); loserBy.set(m.order, { name: m.home, code: m.homeCode }); }
+  }
+
+  const resolveSide = (name?: string, code?: string): { name: string; code?: string } => {
+    const s = norm(name || '');
+    const mm = /(vencedor|perdedor)\D*(\d+)/.exec(s);
+    if (mm) {
+      const src = (mm[1] === 'vencedor' ? winnerBy : loserBy).get(Number(mm[2]));
+      if (src && src.name) return src;
+    }
+    return { name: name || '', code };
+  };
+
+  const resolved = ko.map(m => {
+    const h = resolveSide(m.home, m.homeCode);
+    const a = resolveSide(m.away, m.awayCode);
+    return { ...m, home: h.name, homeCode: h.code, away: a.name, awayCode: a.code };
+  });
+
   const byStage: Record<string, WCMatch[]> = {};
-  ko.forEach(m => {
+  resolved.forEach(m => {
     const key = m.stage || 'Mata-mata';
     (byStage[key] = byStage[key] || []).push(m);
   });
