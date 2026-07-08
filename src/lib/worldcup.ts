@@ -431,8 +431,25 @@ export function deriveBracket(matches: WCMatch[]): WCBracketRound[] {
     return { ...m, home: h.name, homeCode: h.code, away: a.name, awayCode: a.code };
   });
 
+  // Collapse duplicate confrontations per stage (e.g. repeated IA syncs that
+  // created "França x Marrocos" several times with different dates). Key by
+  // stage + the unordered team pair; keep the most complete/ordered record.
+  const bestByPair = new Map<string, WCMatch>();
+  const pairRank = (m: WCMatch) =>
+    (m.status === 'finished' ? 1000 : m.status === 'live' ? 500 : 0) +
+    (m.homeScore != null && m.awayScore != null ? 100 : 0) +
+    (m.order != null ? 10 : 0);
+  for (const m of resolved) {
+    const pair = [`${m.homeCode || norm(m.home)}`, `${m.awayCode || norm(m.away)}`]
+      .map(x => x.toLowerCase()).sort().join('|');
+    const key = `${knockoutOrder(m.stage)}|${pair}`;
+    const prev = bestByPair.get(key);
+    if (!prev || pairRank(m) > pairRank(prev)) bestByPair.set(key, m);
+  }
+  const unique = Array.from(bestByPair.values());
+
   const byStage: Record<string, WCMatch[]> = {};
-  resolved.forEach(m => {
+  unique.forEach(m => {
     const key = m.stage || 'Mata-mata';
     (byStage[key] = byStage[key] || []).push(m);
   });
