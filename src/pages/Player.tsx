@@ -48,7 +48,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { GoogleGenAI } from "@google/genai";
-import { deriveBrazil, deriveToday, deriveBracket, wcResultLetter, flagUrl, fetchWcPendingUpdates, matchDocId, knockoutOrder, isLiveByClock, brasiliaTodayISO, fmtBrDate, WC_LIVE_REFRESH_MS, WCMatch } from '../lib/worldcup';
+import { deriveBrazil, deriveToday, deriveBracket, wcResultLetter, flagUrl, fetchWcPendingUpdates, matchupKey, knockoutOrder, isLiveByClock, brasiliaTodayISO, fmtBrDate, WC_LIVE_REFRESH_MS, WCMatch } from '../lib/worldcup';
 import {
   collection,
   doc,
@@ -1111,10 +1111,9 @@ export function Player() {
       try {
         const updates = await fetchWcPendingUpdates(live);
         for (const u of updates) {
-          const id = u.id || matchDocId(u);
-          const existing = (wcMatchesRef.current || []).find(m => m.id === id);
+          const existing = (wcMatchesRef.current || []).find(m => matchupKey(m) === matchupKey(u));
           if (!existing || existing.status === 'finished') continue; // TV can't create or rewrite finished
-          await updateDoc(doc(db, 'wc_matches', id), {
+          await updateDoc(doc(db, 'wc_matches', existing.id!), {
             homeScore: u.homeScore ?? null,
             awayScore: u.awayScore ?? null,
             homePens: u.homePens ?? null,

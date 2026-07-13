@@ -156,10 +156,22 @@ export const wcResultLetter = (
 const slug = (s: string) =>
   norm(s).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
-// Deterministic doc id so re-importing upserts instead of duplicating. The date
-// is slugged too so a stray "/" (e.g. "11/junho") can't break the doc path.
-export const matchDocId = (m: { date?: string; home: string; away: string }) =>
-  `${slug(m.date || 'sd')}__${slug(m.home)}__${slug(m.away)}`;
+// Stable doc id. Prefer the game number (id_jogo/order) because a knockout
+// game's teams change over time (placeholder → real), so a teams-based id
+// would create a NEW doc each time it resolves, leaving stale duplicates.
+// Falls back to date+teams (date slugged so a stray "/" can't break the path).
+export const matchDocId = (m: { order?: number; date?: string; home: string; away: string }) => {
+  if (typeof m.order === 'number' && !isNaN(m.order)) return `wc-${m.order}`;
+  return `${slug(m.date || 'sd')}__${slug(m.home)}__${slug(m.away)}`;
+};
+
+// Natural key for a fixture (date + unordered team pair), used to find an
+// existing doc to update regardless of which doc-id scheme created it.
+export const matchupKey = (m: { date?: string; home?: string; homeCode?: string; away?: string; awayCode?: string }) => {
+  const teams = [(m.homeCode || norm(m.home || '')), (m.awayCode || norm(m.away || ''))]
+    .map(x => String(x).toLowerCase()).sort().join('|');
+  return `${m.date || ''}|${teams}`;
+};
 
 const normalizeStatus = (raw: any): WCStatus => {
   const s = norm(String(raw || ''));
@@ -269,6 +281,7 @@ export function normalizeMatchItem(item: any): WCMatch | null {
   if (!home || !away) return null;
   const date = normalizeDate(item.date ?? item.data ?? '');
   const stage = item.stage ?? item.fase ?? '';
+  const order = numOrNull(item.order ?? item.id_jogo ?? item.ordem) ?? undefined;
   return {
     date,
     stage,
@@ -282,8 +295,8 @@ export function normalizeMatchItem(item: any): WCMatch | null {
     homePens: numOrNull(item.homePens ?? item.penaltis_casa),
     awayPens: numOrNull(item.awayPens ?? item.penaltis_visitante),
     status: normalizeStatus(item.status),
-    order: numOrNull(item.order ?? item.id_jogo ?? item.ordem) ?? undefined,
-    id: matchDocId({ date, home: String(home), away: String(away) }),
+    order,
+    id: matchDocId({ order, date, home: String(home), away: String(away) }),
   };
 }
 

@@ -6,7 +6,7 @@ import { ref, uploadBytesResumable, getDownloadURL, getMetadata } from 'firebase
 import { collection, getDocs, addDoc, deleteDoc, doc, setDoc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { Company } from '../types';
 import { GoogleGenAI } from "@google/genai";
-import { parseBaseImport, parseLooseJson, fetchWcPendingUpdates, fetchBrazilCampaign, matchDocId, WCMatch } from '../lib/worldcup';
+import { parseBaseImport, parseLooseJson, fetchWcPendingUpdates, fetchBrazilCampaign, matchDocId, matchupKey, WCMatch } from '../lib/worldcup';
 import imageCompression from 'browser-image-compression';
 
 type MediaType = 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'WEATHER' | 'NORTH_STAR' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES' | 'WC_BRAZIL' | 'WC_TODAY' | 'WC_BRACKET';
@@ -245,12 +245,13 @@ export function Media() {
       if (updates.length === 0) { setWcMsg({ ok: false, text: 'A IA não retornou atualizações. Tente novamente.' }); }
       let applied = 0;
       await Promise.all(updates.map(u => {
-        const id = u.id || matchDocId(u);
-        const existing = wcMatches.find(m => m.id === id);
+        const existing = wcMatches.find(m => matchupKey(m) === matchupKey(u));
         if (existing && existing.status === 'finished') return Promise.resolve(); // never rewrite finished
         applied++;
+        const id = existing?.id || u.id || matchDocId(u);
         return setDoc(doc(db, 'wc_matches', id), wcDocData({
           ...u,
+          order: u.order ?? existing?.order,
           date: u.date || existing?.date, time: u.time || existing?.time, stage: u.stage || existing?.stage,
           homeCode: u.homeCode || existing?.homeCode, awayCode: u.awayCode || existing?.awayCode,
         }), { merge: true });
@@ -273,7 +274,11 @@ export function Media() {
     try {
       const games = await fetchBrazilCampaign();
       if (games.length === 0) { setWcMsg({ ok: false, text: 'A IA não retornou jogos do Brasil. Tente novamente.' }); return; }
-      await Promise.all(games.map(m => setDoc(doc(db, 'wc_matches', m.id!), wcDocData(m), { merge: true })));
+      await Promise.all(games.map(m => {
+        const existing = wcMatches.find(x => matchupKey(x) === matchupKey(m));
+        const id = existing?.id || m.id!;
+        return setDoc(doc(db, 'wc_matches', id), wcDocData({ ...m, order: m.order ?? existing?.order }), { merge: true });
+      }));
       await loadWcMatches();
       setWcMsg({ ok: true, text: `✅ Trajetória do Brasil sincronizada (${games.length} jogo(s)).` });
     } catch (e: any) {
