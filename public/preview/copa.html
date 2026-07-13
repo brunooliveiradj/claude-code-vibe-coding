@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Preview · Modo Copa do Mundo — Adsplay Labs TV</title>
+<style>
+  :root {
+    --bg: #f4f4f5; --card: #ffffff; --ink: #18181b; --ink2: #52525b; --muted: #a1a1aa;
+    --line: #e4e4e7; --green: #059669; --green2: #10b981; --yellow: #facc15;
+    --rose: #f43f5e; --adsplay: #6d28d9;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--sans); background: #e7e7ea; color: var(--ink); padding: 32px 16px 80px; }
+  .page { max-width: 1180px; margin: 0 auto; }
+  .page > header { text-align: center; margin-bottom: 28px; }
+  .page > header h1 { font-size: 26px; font-weight: 900; letter-spacing: -0.02em; }
+  .page > header p { color: var(--ink2); font-size: 14px; margin-top: 6px; }
+  .cap { display: flex; align-items: baseline; gap: 10px; margin: 36px 4px 10px; }
+  .cap b { font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: .14em; }
+  .cap span { font-size: 12px; color: var(--muted); }
+  /* a "TV screen": 16:9 */
+  .tv { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 20px; overflow: hidden;
+        box-shadow: 0 20px 50px -20px rgba(0,0,0,.4); background: var(--card); }
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column;
+            background: linear-gradient(180deg, #fff, #f4f4f5); overflow: hidden; }
+  .accent { position: absolute; top: 0; left: 0; right: 0; height: 6px;
+            background: linear-gradient(90deg, var(--green2), var(--yellow), var(--green2)); }
+  .flag { display: inline-block; object-fit: cover; border-radius: 3px; box-shadow: 0 1px 2px rgba(0,0,0,.15); background:#f4f4f5; }
+  .flagph { display:inline-flex; align-items:center; justify-content:center; background:#fafafa; border:1px dashed var(--line); border-radius:3px; color:var(--muted); }
+  .bold { font-weight: 900; } .green { color: var(--green); } .muted { color: var(--muted); }
+  .win { color: var(--green); } .dim { opacity: .45; }
+  /* Header inside each screen */
+  .shead { display: flex; align-items: center; gap: 16px; padding: 3.2% 3.6% 0; position: relative; z-index: 2; }
+  .shead .icon { width: 3.6vw; max-width: 58px; aspect-ratio:1; border-radius: 14px; display:flex; align-items:center; justify-content:center; }
+  .shead h2 { font-size: 3.4vw; line-height: .95; font-weight: 900; letter-spacing: -0.03em; }
+  .shead .sub { font-size: 1vw; font-weight: 900; text-transform: uppercase; letter-spacing: .28em; margin-top: .5vw; }
+  @media (min-width: 1180px){ .shead h2{font-size:40px} .shead .sub{font-size:12px} .shead .icon{width:58px} }
+  .note { font-size: 12px; color: var(--ink2); background: #fff; border:1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-top: 10px; }
+  .legend { font-size: 12px; color: var(--muted); margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Preview · Modo Copa do Mundo</h1>
+    <p>Como as 3 telas WC ficam com os dados oficiais corrigidos. Prévia estática — nada é gravado no banco.</p>
+  </header>
+
+  <div class="cap"><b>WC · Mata-Mata</b><span>Caminho até a Final — chaveamento por id_jogo, vencedores propagados</span></div>
+  <div class="tv"><div class="screen" id="bracket"></div></div>
+
+  <div class="cap"><b>WC · Brasil</b><span>Trajetória (jogos passados) + próximo jogo com data e horário</span></div>
+  <div class="tv"><div class="screen" id="brazil"></div></div>
+
+  <div class="cap"><b>WC · Jogos de Hoje</b><span>Exemplo com "hoje" = 09/07 — horários em GMT-3, badge Ao Vivo/Agendado</span></div>
+  <div class="tv"><div class="screen" id="today"></div></div>
+
+  <p class="note"><b>Nota:</b> faltam 2 jogos de 16avos na direita (adversários da Espanha e da Argentina) porque as bandeiras não carregaram na sua tela e não quis chutar — aparecem como caixas vazias. As bandeiras vêm do flagcdn; se abrir sem internet, elas não carregam.</p>
+</div>
+
+<script>
+const DEMO_TODAY = "2026-07-09";
+const flag = (code, w) => code ? `https://flagcdn.com/${w||'w160'}/${code}.png` : null;
+const M = [
+  {o:73,st:"16 avos de final",d:"2026-06-28",t:"16:00",h:"Canadá",hc:"ca",a:"África do Sul",ac:"za",hs:1,as:0},
+  {o:74,st:"16 avos de final",d:"2026-06-29",t:"17:30",h:"Alemanha",hc:"de",a:"Paraguai",ac:"py",hs:1,as:1,hp:3,ap:4},
+  {o:75,st:"16 avos de final",d:"2026-06-29",t:"22:00",h:"Holanda",hc:"nl",a:"Marrocos",ac:"ma",hs:1,as:1,hp:2,ap:3},
+  {o:76,st:"16 avos de final",d:"2026-06-29",t:"14:00",h:"Brasil",hc:"br",a:"Japão",ac:"jp",hs:2,as:1},
+  {o:77,st:"16 avos de final",d:"2026-06-30",t:"18:00",h:"França",hc:"fr",a:"Suécia",ac:"se",hs:3,as:0},
+  {o:78,st:"16 avos de final",d:"2026-06-30",t:"14:00",h:"Noruega",hc:"no",a:"Costa do Marfim",ac:"ci",hs:2,as:1},
+  {o:79,st:"16 avos de final",d:"2026-06-30",t:"23:00",h:"México",hc:"mx",a:"Equador",ac:"ec",hs:2,as:0},
+  {o:80,st:"16 avos de final",d:"2026-07-01",t:"13:00",h:"Inglaterra",hc:"gb-eng",a:"Congo DR",ac:"cd",hs:2,as:1},
+  {o:81,st:"16 avos de final",d:"2026-07-01",t:"21:00",h:"Estados Unidos",hc:"us",a:"Bósnia e Herzegovina",ac:"ba",hs:2,as:0},
+  {o:82,st:"16 avos de final",d:"2026-07-01",t:"17:00",h:"Bélgica",hc:"be",a:"Senegal",ac:"sn",hs:3,as:2},
+  {o:83,st:"16 avos de final",d:"2026-07-02",t:"20:00",h:"Portugal",hc:"pt",a:"Croácia",ac:"hr",hs:2,as:1},
+  {o:85,st:"16 avos de final",d:"2026-07-03",t:"00:00",h:"Suíça",hc:"ch",a:"Argélia",ac:"dz",hs:2,as:0},
+  {o:87,st:"16 avos de final",d:"2026-07-03",t:"22:30",h:"Colômbia",hc:"co",a:"Gana",ac:"gh",hs:1,as:0},
+  {o:88,st:"16 avos de final",d:"2026-07-03",t:"15:00",h:"Austrália",hc:"au",a:"Egito",ac:"eg",hs:1,as:1,hp:2,ap:3},
+  {o:89,st:"Oitavas de Final",d:"2026-07-04",t:"18:00",h:"Paraguai",hc:"py",a:"França",ac:"fr",hs:0,as:1},
+  {o:90,st:"Oitavas de Final",d:"2026-07-04",t:"14:00",h:"Canadá",hc:"ca",a:"Marrocos",ac:"ma",hs:0,as:3},
+  {o:91,st:"Oitavas de Final",d:"2026-07-05",t:"17:00",h:"Brasil",hc:"br",a:"Noruega",ac:"no",hs:1,as:2},
+  {o:92,st:"Oitavas de Final",d:"2026-07-05",t:"21:00",h:"México",hc:"mx",a:"Inglaterra",ac:"gb-eng",hs:2,as:3},
+  {o:93,st:"Oitavas de Final",d:"2026-07-06",t:"16:00",h:"Portugal",hc:"pt",a:"Espanha",ac:"es",hs:0,as:1},
+  {o:94,st:"Oitavas de Final",d:"2026-07-06",t:"21:00",h:"Estados Unidos",hc:"us",a:"Bélgica",ac:"be",hs:1,as:4},
+  {o:95,st:"Oitavas de Final",d:"2026-07-07",t:"13:00",h:"Argentina",hc:"ar",a:"Egito",ac:"eg",hs:3,as:2},
+  {o:96,st:"Oitavas de Final",d:"2026-07-07",t:"17:00",h:"Suíça",hc:"ch",a:"Colômbia",ac:"co",hs:2,as:1},
+  {o:97,st:"Quartas de Final",d:"2026-07-09",t:"17:00",h:"França",hc:"fr",a:"Marrocos",ac:"ma",hs:null,as:null,status:"scheduled"},
+  {o:98,st:"Quartas de Final",d:"2026-07-11",t:"18:00",h:"Noruega",hc:"no",a:"Inglaterra",ac:"gb-eng",hs:null,as:null,status:"scheduled"},
+  {o:99,st:"Quartas de Final",d:"2026-07-10",t:"16:00",h:"Espanha",hc:"es",a:"Bélgica",ac:"be",hs:null,as:null,status:"scheduled"},
+  {o:100,st:"Quartas de Final",d:"2026-07-11",t:"22:00",h:"Argentina",hc:"ar",a:"Suíça",ac:"ch",hs:null,as:null,status:"scheduled"},
+  {o:101,st:"Semifinal",d:"2026-07-14",t:"16:00",h:"Vencedor do Jogo 97",a:"Vencedor do Jogo 98",hs:null,as:null,status:"scheduled"},
+  {o:102,st:"Semifinal",d:"2026-07-15",t:"16:00",h:"Vencedor do Jogo 99",a:"Vencedor do Jogo 100",hs:null,as:null,status:"scheduled"},
+  {o:103,st:"Disputa do 3º Lugar",d:"2026-07-18",t:"18:00",h:"Perdedor do Jogo 101",a:"Perdedor do Jogo 102",hs:null,as:null,status:"scheduled"},
+  {o:104,st:"Grande Final",d:"2026-07-19",t:"16:00",h:"Vencedor do Jogo 101",a:"Vencedor do Jogo 102",hs:null,as:null,status:"scheduled"},
+].map(m => ({ status: (m.hs!=null&&m.as!=null)?"finished":(m.status||"scheduled"), hp:null, ap:null, ...m }));
+
+const fmtBr = iso => { const x=/(\d{4})-(\d{2})-(\d{2})/.exec(iso||""); return x?`${x[3]}/${x[2]}`:(iso||""); };
+const winSide = m => { if(m.status!=="finished"||m.hs==null||m.as==null)return 0; if(m.hs>m.as)return 1; if(m.as>m.hs)return 2; if(m.hp!=null&&m.ap!=null){if(m.hp>m.ap)return 1;if(m.ap>m.hp)return 2;} return 0; };
+const koOrder = s => { s=(s||"").toLowerCase(); if(s.includes("16 avos"))return 1; if(s.includes("oitavas"))return 2; if(s.includes("quartas"))return 3; if(s.includes("semi"))return 4; if(s.includes("3"))return 5; if(s.includes("final"))return 6; return 99; };
+
+function flagHTML(code, cls){ const u=flag(code, cls.w); return u ? `<img class="flag" src="${u}" style="width:${cls.fw};height:${cls.fh}" alt="">` : `<span class="flagph" style="width:${cls.fw};height:${cls.fh};font-size:${cls.fs}">🏳️</span>`; }
+
+/* ---------- BRACKET ---------- */
+function renderBracket(){
+  const ko = M.filter(m=>koOrder(m.st)<99);
+  const winBy={}, loseBy={};
+  ko.forEach(m=>{ if(m.o==null)return; const w=winSide(m); if(w===1){winBy[m.o]={n:m.h,c:m.hc};loseBy[m.o]={n:m.a,c:m.ac};} else if(w===2){winBy[m.o]={n:m.a,c:m.ac};loseBy[m.o]={n:m.h,c:m.hc};} });
+  const resolve=(n,c)=>{ const s=(n||"").toLowerCase(); const mm=/(vencedor|perdedor)\D*(\d+)/.exec(s); if(mm){const src=(mm[1]==="vencedor"?winBy:loseBy)[+mm[2]]; if(src)return {n:src.n,c:src.c};} return {n:n||"",c}; };
+  const R = ko.map(m=>{const H=resolve(m.h,m.hc),A=resolve(m.a,m.ac); return {...m,h:H.n,hc:H.c,a:A.n,ac:A.c};});
+  const byOrder = o => R.filter(m=>koOrder(m.st)===o).sort((a,b)=>(a.o||1e9)-(b.o||1e9));
+  const split=(arr,n)=>{const l=arr.slice(0,n),r=arr.slice(n,n*2);while(l.length<n)l.push(null);while(r.length<n)r.push(null);return[l,r];};
+  const [r32L,r32R]=split(byOrder(1),8),[r16L,r16R]=split(byOrder(2),4),[qfL,qfR]=split(byOrder(3),2),[sfL,sfR]=split(byOrder(4),1);
+  const finalM=byOrder(6)[0]||null, thirdM=byOrder(5)[0]||null;
+
+  const TIER={
+    r32:{fw:"1.6vw",fh:"1.1vw",fs:"1vw",w:"w80",sc:".9vw",foot:".5vw",pad:"0.4vw 0.6vw",min:"3.4%"},
+    r16:{fw:"2.2vw",fh:"1.5vw",fs:"1.3vw",w:"w160",sc:"1.2vw",foot:".6vw",pad:"0.5vw 0.7vw",min:"5%"},
+    qf:{fw:"2.8vw",fh:"1.9vw",fs:"1.6vw",w:"w160",sc:"1.5vw",foot:".7vw",pad:"0.6vw 0.8vw",min:"7%"},
+    sf:{fw:"3.6vw",fh:"2.5vw",fs:"2vw",w:"w320",sc:"2vw",foot:".8vw",pad:"0.8vw 1vw",min:"10%"},
+    final:{fw:"5vw",fh:"3.4vw",fs:"3vw",w:"w320",sc:"3vw",foot:"1vw",pad:"1.1vw 1.2vw",min:"14%"},
+    third:{fw:"2.8vw",fh:"1.9vw",fs:"1.6vw",w:"w160",sc:"1.5vw",foot:".7vw",pad:"0.6vw 0.8vw",min:"7%"},
+  };
+  const box=(m,tier)=>{ const t=TIER[tier]; const emph=tier==="sf"||tier==="final";
+    if(!m) return `<div style="border:1px dashed var(--line);background:#fafafa;border-radius:10px;min-height:${t.min}"></div>`;
+    const w=winSide(m); const when=`${fmtBr(m.d)}${m.t?" · "+m.t:""}`;
+    const row=(name,code,score,pens,isWin,isLose)=>`<div style="display:flex;align-items:center;gap:.4vw;${isLose?'opacity:.45':''}">
+        ${flagHTML(code,t)}<span class="bold" style="margin-left:auto;font-size:${t.sc};${isWin?'color:var(--green)':''}">${score??''}${pens!=null?` (${pens})`:''}</span></div>`;
+    return `<div style="border:1px solid ${emph?'var(--green2)':'var(--line)'};background:#fff;border-radius:12px;padding:${t.pad};display:flex;flex-direction:column;gap:.3vw;box-shadow:0 1px 3px rgba(0,0,0,.05)">
+      ${row(m.h,m.hc,m.hs,m.hp,w===1,w===2)}
+      <div style="height:1px;background:var(--line)"></div>
+      ${row(m.a,m.ac,m.as,m.ap,w===2,w===1)}
+      ${when && m.status!=="finished" ? `<div style="text-align:center;color:var(--muted);font-weight:700;font-size:${t.foot};padding-top:.2vw">${when} · Brasília</div>`:""}
+    </div>`;
+  };
+  const col=(label,boxes,tier)=>`<div style="flex:1;display:flex;flex-direction:column;min-width:0">
+      <div class="bold green" style="font-size:.8vw;text-transform:uppercase;letter-spacing:.15em;text-align:center;margin-bottom:.8vw">${label}</div>
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:space-around;gap:.4vw">${boxes.map(m=>box(m,tier)).join("")}</div>
+    </div>`;
+
+  document.getElementById("bracket").innerHTML = `
+    <div class="accent"></div>
+    <div style="text-align:center;padding:2.4% 0 1%;position:relative;z-index:2">
+      <h2 class="bold" style="font-size:3.2vw;letter-spacing:-.03em">Caminho até a Final</h2>
+      <div class="bold green" style="font-size:.95vw;text-transform:uppercase;letter-spacing:.28em;margin-top:.4vw">Copa do Mundo FIFA 2026 · Mata-Mata</div>
+    </div>
+    <div style="flex:1;display:flex;align-items:stretch;gap:.6vw;padding:0 2.2% 2.2%;min-height:0">
+      ${col("2ª Fase",r32L,"r32")}${col("Oitavas",r16L,"r16")}${col("Quartas",qfL,"qf")}${col("Semifinais",sfL,"sf")}
+      <div style="display:flex;flex-direction:column;justify-content:center;gap:2vw;padding:0 .4vw;flex:0 0 15%">
+        <div style="text-align:center"><div class="bold green" style="font-size:1.6vw;text-transform:uppercase;letter-spacing:.2em;margin-bottom:.6vw">Final</div>${box(finalM,"final")}</div>
+        <div style="text-align:center"><div class="bold muted" style="font-size:.7vw;text-transform:uppercase;letter-spacing:.14em;margin-bottom:.3vw">Disputa do 3º Lugar</div>${box(thirdM,"third")}</div>
+      </div>
+      ${col("Semifinais",sfR,"sf")}${col("Quartas",qfR,"qf")}${col("Oitavas",r16R,"r16")}${col("2ª Fase",r32R,"r32")}
+    </div>`;
+}
+
+/* ---------- BRAZIL ---------- */
+function renderBrazil(){
+  const isBr = n => (n||"").toLowerCase()==="brasil";
+  const br = M.filter(m=>isBr(m.h)||isBr(m.a)).sort((a,b)=>(a.d+a.t).localeCompare(b.d+b.t));
+  const results = br.filter(m=>m.status==="finished").map(m=>{const bh=isBr(m.h);return {opp:bh?m.a:m.h,oc:bh?m.ac:m.hc,brs:bh?m.hs:m.as,adv:bh?m.as:m.hs,st:m.st,d:m.d};});
+  const nx = br.find(m=>m.status!=="finished");
+  const let_ = (b,a)=> b>a?"V":b<a?"D":"E";
+  const fl = (c,fw,fh,fs)=> flagHTML(c,{w:"w160",fw,fh,fs});
+  const rows = results.map(r=>{const L=let_(r.brs,r.adv);const col=L==="V"?"var(--green2)":L==="D"?"var(--rose)":"#a1a1aa";
+    return `<div style="background:#fff;border:1px solid var(--line);border-radius:14px;padding:.9vw 1.4vw;display:flex;align-items:center;gap:1.2vw;box-shadow:0 1px 3px rgba(0,0,0,.05)">
+      <div style="width:2.4vw;height:2.4vw;border-radius:10px;background:${col};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:1.3vw;flex-shrink:0">${L}</div>
+      <div style="flex:1;display:flex;align-items:center;gap:.8vw;min-width:0">
+        ${fl("br","2vw","1.4vw","1.6vw")}<span class="bold" style="font-size:1.7vw">${r.brs}</span><span class="muted bold" style="font-size:1.3vw">×</span><span class="bold" style="font-size:1.7vw">${r.adv}</span>
+        ${fl(r.oc,"2vw","1.4vw","1.6vw")}<span class="bold" style="font-size:1.4vw;color:var(--ink2)">${r.opp}</span>
+      </div>
+      <div style="text-align:right;flex-shrink:0"><div class="bold muted" style="font-size:.8vw;text-transform:uppercase;letter-spacing:.1em">${r.st}</div><div class="muted" style="font-size:.8vw">${fmtBr(r.d)}</div></div>
+    </div>`;}).join("");
+  const next = nx ? `<div style="flex:1;background:#fff;border:2px solid #d1fae5;border-radius:24px;padding:2vw;display:flex;flex-direction:column;justify-content:center;gap:2vw;box-shadow:0 10px 30px -12px rgba(5,150,105,.15)">
+      <div style="display:flex;align-items:center;justify-content:center;gap:2.5vw">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:.6vw">${fl("br","5vw","3.4vw","4vw")}<span class="bold" style="font-size:1.6vw">BRASIL</span></div>
+        <span class="bold" style="font-size:3vw;color:#d4d4d8">×</span>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:.6vw">${fl(nx.hc==="br"?nx.ac:nx.hc,"5vw","3.4vw","4vw")}<span class="bold" style="font-size:1.6vw">${(nx.hc==="br"?nx.a:nx.h).toUpperCase()}</span></div>
+      </div>
+      <div style="text-align:center"><span class="bold" style="display:inline-block;background:var(--green2);color:#fff;border-radius:999px;padding:.4vw 1.2vw;font-size:.9vw;text-transform:uppercase;letter-spacing:.1em">${nx.st}</span>
+        <div class="bold" style="font-size:2.6vw;margin-top:.8vw">${fmtBr(nx.d)} · ${nx.t}</div><div class="muted bold" style="font-size:.9vw;text-transform:uppercase;letter-spacing:.15em">Horário de Brasília</div></div>
+    </div>` : `<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:1.4vw" class="bold">Sem jogo agendado</div>`;
+
+  document.getElementById("brazil").innerHTML = `
+    <div class="accent"></div>
+    <div style="display:flex;align-items:center;gap:1.2vw;padding:2.6% 3.2% 0;position:relative;z-index:2">
+      ${fl("br","3.4vw","2.3vw","3vw")}
+      <div><h2 class="bold" style="font-size:3.4vw;letter-spacing:-.03em">Seleção Brasileira</h2>
+        <div class="bold green" style="font-size:1vw;text-transform:uppercase;letter-spacing:.28em;margin-top:.4vw">Copa do Mundo FIFA 2026</div></div>
+    </div>
+    <div style="flex:1;display:grid;grid-template-columns:5fr 7fr;gap:2vw;padding:2% 3.2% 3%;min-height:0">
+      <div style="display:flex;flex-direction:column"><div class="bold green" style="font-size:1.2vw;text-transform:uppercase;letter-spacing:.2em;margin-bottom:1vw">Próximo Jogo</div>${next}</div>
+      <div style="display:flex;flex-direction:column;min-height:0"><div class="bold green" style="font-size:1.2vw;text-transform:uppercase;letter-spacing:.2em;margin-bottom:1vw">Trajetória</div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:.7vw;overflow:hidden">${rows}</div></div>
+    </div>`;
+}
+
+/* ---------- TODAY ---------- */
+function renderToday(){
+  const day = M.filter(m=>m.d===DEMO_TODAY).sort((a,b)=>(a.t||"").localeCompare(b.t||""));
+  const fl=(c)=>flagHTML(c,{w:"w160",fw:"5vw",fh:"3.4vw",fs:"4vw"});
+  const badge=m=> m.status==="finished"
+    ? `<span class="bold" style="background:#e4e4e7;color:#52525b;border-radius:999px;padding:.4vw 1.2vw;font-size:1vw;text-transform:uppercase;letter-spacing:.1em">Encerrado</span>`
+    : `<span class="bold" style="background:#18181b;color:#fff;border-radius:999px;padding:.4vw 1.2vw;font-size:1vw;text-transform:uppercase;letter-spacing:.1em">Agendado</span>`;
+  const cards = day.map(m=>`<div style="background:#fff;border:2px solid var(--line);border-radius:24px;padding:1.6vw 2vw;display:flex;align-items:center;gap:1.6vw;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+      <div style="flex:1;display:flex;align-items:center;justify-content:flex-end;gap:1vw;min-width:0"><span class="bold" style="font-size:2.2vw;text-align:right">${m.h.toUpperCase()}</span>${fl(m.hc)}</div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:.6vw;flex-shrink:0;min-width:11vw">
+        <span class="bold" style="font-size:2.6vw;color:#d4d4d8">×</span>${badge(m)}
+        <span class="bold" style="font-size:1vw;color:var(--ink2)">${m.t} · Brasília</span></div>
+      <div style="flex:1;display:flex;align-items:center;gap:1vw;min-width:0">${fl(m.ac)}<span class="bold" style="font-size:2.2vw">${m.a.toUpperCase()}</span></div>
+    </div>`).join("");
+  document.getElementById("today").innerHTML = `
+    <div class="accent" style="background:var(--adsplay)"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:2.6% 3.2% 0;position:relative;z-index:2">
+      <div style="display:flex;align-items:center;gap:1.2vw">
+        <div class="icon" style="width:4vw;height:4vw;background:#ede9fe;color:var(--adsplay);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:2vw">📅</div>
+        <div><h2 class="bold" style="font-size:3.4vw;letter-spacing:-.03em">Jogos de Hoje</h2>
+          <div class="bold" style="color:var(--adsplay);font-size:1vw;text-transform:uppercase;letter-spacing:.28em;margin-top:.4vw">quarta-feira, 09 de julho</div></div>
+      </div>
+      <span class="bold muted" style="font-size:1vw;text-transform:uppercase;letter-spacing:.28em">Copa FIFA 2026</span>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:1.2vw;padding:2% 3.2% 3%">${cards || '<div class="bold muted" style="text-align:center;font-size:1.6vw">Nenhum jogo hoje</div>'}</div>`;
+}
+
+renderBracket(); renderBrazil(); renderToday();
+</script>
+</body>
+</html>
