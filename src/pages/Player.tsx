@@ -142,6 +142,35 @@ const TeamFlag = ({ code, emoji, imgClass, emojiClass, size }: { code?: string; 
   return <span className={emojiClass}>{emoji || '🏳️'}</span>;
 };
 
+// North Star: % variation vs. the previous saved value. prev==null means the
+// metric was never updated before (no badge). prev==0 → % is undefined, so we
+// show the absolute delta instead (e.g. "+5").
+const NSDelta = React.memo(({ prev, cur, size = 'text-base' }: { prev?: number | null; cur: number; size?: string }) => {
+  if (prev == null) return null;
+  const p = Number(prev) || 0;
+  let dir: 1 | -1 | 0;
+  let label: string;
+  if (p === 0) {
+    dir = cur > 0 ? 1 : 0;
+    label = cur > 0 ? `+${cur}` : '0%';
+  } else {
+    const pct = Math.round(((cur - p) / p) * 100);
+    dir = pct > 0 ? 1 : pct < 0 ? -1 : 0;
+    label = `${pct > 0 ? '+' : ''}${pct}%`;
+  }
+  const cls = dir > 0
+    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20'
+    : dir < 0
+      ? 'bg-rose-500/15 text-rose-400 border-rose-500/20'
+      : 'bg-white/5 text-zinc-500 border-white/10';
+  const arrow = dir > 0 ? '▲' : dir < 0 ? '▼' : '•';
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border font-black ${size} ${cls}`}>
+      <span className="text-[0.7em]">{arrow}</span>{label}
+    </span>
+  );
+});
+
 // Helper Components for Animations
 const Counter = React.memo(({ value, className }: { value: number, className?: string }) => {
   const count = useMotionValue(0);
@@ -1796,6 +1825,7 @@ export function Player() {
                       <div className="text-7xl font-black text-white tracking-tighter">
                         <Counter value={Number(currentMedia.payload.adsplay) || 0} />
                       </div>
+                      <NSDelta prev={currentMedia.payload.prevMetrics?.adsplay} cur={Number(currentMedia.payload.adsplay) || 0} />
                       <p className="text-zinc-600 font-bold uppercase tracking-widest text-xs">Campanhas Ativas</p>
                     </div>
 
@@ -1805,6 +1835,7 @@ export function Player() {
                       <div className="text-7xl font-black text-white tracking-tighter">
                         <Counter value={Number(currentMedia.payload.pixel) || 0} />
                       </div>
+                      <NSDelta prev={currentMedia.payload.prevMetrics?.pixel} cur={Number(currentMedia.payload.pixel) || 0} />
                       <p className="text-zinc-600 font-bold uppercase tracking-widest text-xs">Campanhas Ativas</p>
                     </div>
 
@@ -1814,6 +1845,7 @@ export function Player() {
                       <div className="text-7xl font-black text-white tracking-tighter">
                         <Counter value={Number(currentMedia.payload.trigger) || 0} />
                       </div>
+                      <NSDelta prev={currentMedia.payload.prevMetrics?.trigger} cur={Number(currentMedia.payload.trigger) || 0} />
                       <p className="text-zinc-600 font-bold uppercase tracking-widest text-xs">Campanhas Ativas</p>
                     </div>
 
@@ -1823,6 +1855,7 @@ export function Player() {
                       <div className="text-7xl font-black text-white tracking-tighter">
                         <Counter value={Number(currentMedia.payload.adsmax) || 0} />
                       </div>
+                      <NSDelta prev={currentMedia.payload.prevMetrics?.adsmax} cur={Number(currentMedia.payload.adsmax) || 0} />
                       <p className="text-zinc-600 font-bold uppercase tracking-widest text-xs">Campanhas Ativas</p>
                     </div>
 
@@ -1845,6 +1878,18 @@ export function Player() {
                           <span className="text-zinc-400 font-black text-3xl tracking-tighter">/ {Number(currentMedia.payload.currentYearGoal) || 200}</span>
                           <div className="h-1 w-16 bg-zinc-800 rounded-full" />
                         </div>
+                        {(() => {
+                          const pm = currentMedia.payload.prevMetrics;
+                          if (!pm) return null;
+                          const prevSum = (Number(pm.adsplay) || 0) + (Number(pm.pixel) || 0) + (Number(pm.trigger) || 0) + (Number(pm.adsmax) || 0);
+                          const curSum = (Number(currentMedia.payload.adsplay) || 0) + (Number(currentMedia.payload.pixel) || 0) + (Number(currentMedia.payload.trigger) || 0) + (Number(currentMedia.payload.adsmax) || 0);
+                          return (
+                            <div className="flex flex-col items-center gap-2 pt-2">
+                              <NSDelta prev={prevSum} cur={curSum} size="text-2xl" />
+                              <span className="text-zinc-600 font-bold uppercase tracking-[0.2em] text-[10px]">vs. última atualização</span>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>

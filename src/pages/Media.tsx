@@ -557,6 +557,24 @@ export function Media() {
       finalPayload.images = [];
     }
 
+    // NORTH_STAR: snapshot the previous metric values whenever any of them
+    // changes, so the TV can show the % variation vs. the last update.
+    if (type === 'NORTH_STAR' && editingId) {
+      const stored = mediaList.find(m => m.id === editingId)?.payload || {};
+      const keys = ['adsplay', 'pixel', 'trigger', 'adsmax'] as const;
+      const changed = keys.some(k => (Number(stored[k]) || 0) !== (Number(finalPayload[k]) || 0));
+      if (changed) {
+        finalPayload.prevMetrics = {
+          adsplay: Number(stored.adsplay) || 0,
+          pixel: Number(stored.pixel) || 0,
+          trigger: Number(stored.trigger) || 0,
+          adsmax: Number(stored.adsmax) || 0,
+        };
+        finalPayload.prevUpdatedAt = Date.now();
+      }
+      // unchanged → keep the existing prevMetrics already in the payload
+    }
+
     if (type === 'NEWS_CLIPPING' && (!finalPayload.newsItems || finalPayload.newsItems.length === 0)) {
       setError('Adicione pelo menos uma notícia para o Clipping.');
       setLoading(false);
