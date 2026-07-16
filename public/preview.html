@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Inbox — Prévia</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #12110F;
+  --surface: #1A1916;
+  --card-hover: #1C1A17;
+  --border: #2E2B26;
+  --text: #EDE9E3;
+  --muted: #7D7872;
+  --faint: #4A4642;
+  --dim: #3A3630;
+  --alta: #FF5252;
+  --media: #F5A623;
+  --lixo: #5A5551;
+  --blue: #5EADF7;
+  --green: #34D399;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+body { display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── HEADER ─────────────────────────────── */
+.header {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.logo {
+  font-size: 13px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+.logo em { color: var(--blue); font-style: normal; }
+.header-info { font-size: 11px; font-family: var(--mono); color: var(--faint); }
+
+.precision {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(52,211,153,0.08);
+  border: 1px solid rgba(52,211,153,0.25);
+  border-radius: 20px; padding: 3px 10px;
+  font-size: 11px; font-family: var(--mono); color: var(--green);
+  font-variant-numeric: tabular-nums;
+}
+.precision-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+
+.btn-refresh {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 6px;
+  background: none; border: 1px solid var(--border);
+  color: var(--muted); padding: 6px 14px; border-radius: 6px;
+  font-size: 12px; cursor: pointer; font-family: inherit;
+  transition: all 0.15s;
+}
+.btn-refresh:hover { color: var(--text); border-color: var(--blue); }
+.btn-refresh .spin { display: inline-block; }
+.btn-refresh.loading .spin { animation: rot 0.8s linear infinite; }
+@keyframes rot { to { transform: rotate(360deg); } }
+
+/* ── STATS BAR ──────────────────────────── */
+.stats {
+  display: flex; align-items: center;
+  height: 36px; padding: 0 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0; font-size: 12px;
+}
+.stat { display: flex; align-items: center; gap: 7px; }
+.stat-count {
+  font-family: var(--mono); font-weight: 700; font-size: 11px;
+  padding: 1px 7px; border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.stat-sep { width: 1px; height: 14px; background: var(--border); margin: 0 14px; }
+.stat-label { color: var(--muted); }
+.stats-total { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--dim); }
+
+/* ── MAIN ───────────────────────────────── */
+.main { flex: 1; overflow-y: auto; padding: 18px 20px; min-height: 0; }
+.main::-webkit-scrollbar { width: 4px; }
+.main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.columns {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+  margin-bottom: 20px;
+}
+@media (max-width: 900px) { .columns { grid-template-columns: 1fr; } }
+
+/* column */
+.col { min-width: 0; }
+.col-head {
+  display: flex; align-items: flex-end; gap: 10px;
+  padding: 10px 0 10px; margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.col-alta .col-head { border-top: 2px solid var(--alta); }
+.col-media .col-head { border-top: 2px solid var(--media); }
+.col-num {
+  font-family: var(--mono); font-size: 38px; font-weight: 800;
+  line-height: 1; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.col-alta .col-num { color: var(--alta); }
+.col-media .col-num { color: var(--media); }
+.col-name {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em;
+  font-weight: 700; color: var(--muted); line-height: 1.2;
+}
+.col-hint { font-size: 10px; color: var(--faint); }
+
+/* ── CARD ───────────────────────────────── */
+.card {
+  position: relative; padding: 9px 10px 9px 14px;
+  border-radius: 6px; margin-bottom: 2px;
+  transition: background 0.12s, opacity 0.3s;
+}
+.card::before {
+  content: ''; position: absolute; left: 4px; top: 8px; bottom: 8px;
+  width: 2px; border-radius: 1px; opacity: 0.6;
+}
+.col-alta .card::before { background: var(--alta); }
+.col-media .card::before { background: var(--media); }
+.card:hover { background: var(--card-hover); }
+.card.done { opacity: 0.3; pointer-events: none; }
+
+.card-top { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
+.avatar {
+  width: 19px; height: 19px; border-radius: 50%;
+  font-size: 9px; font-weight: 800; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.sender { font-size: 11px; color: var(--muted); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.date { font-size: 10px; font-family: var(--mono); color: var(--faint); flex-shrink: 0; }
+.subject {
+  font-size: 13px; font-weight: 500; line-height: 1.35;
+  margin-bottom: 2px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.snippet { font-size: 11px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* feedback row */
+.actions {
+  display: flex; gap: 5px; margin-top: 7px;
+  opacity: 0; transition: opacity 0.12s; pointer-events: none;
+}
+.card:hover .actions { opacity: 1; pointer-events: auto; }
+.act {
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--muted); font-size: 11px; padding: 2px 9px;
+  border-radius: 4px; cursor: pointer; font-family: inherit;
+  transition: all 0.1s; line-height: 1.6;
+}
+.act.ok:hover { color: var(--green); border-color: rgba(52,211,153,0.4); background: rgba(52,211,153,0.07); }
+.act.ng:hover { color: var(--alta); border-color: rgba(255,82,82,0.35); background: rgba(255,82,82,0.07); }
+
+.menu-wrap { position: relative; }
+.menu {
+  position: absolute; bottom: calc(100% + 4px); left: 0;
+  background: #201E1A; border: 1px solid #3A3630; border-radius: 7px;
+  padding: 4px; min-width: 150px; z-index: 30;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.5);
+  display: none;
+}
+.menu.open { display: block; }
+.menu-label { font-size: 10px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 9px 4px; }
+.menu-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 9px; border-radius: 4px; cursor: pointer;
+  font-size: 12px; color: var(--muted); transition: all 0.1s;
+}
+.menu-item:hover { background: var(--card-hover); color: var(--text); }
+.mi-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── LIXO SECTION ───────────────────────── */
+.lixo-section { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.lixo-head {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.lixo-num {
+  font-family: var(--mono); font-size: 26px; font-weight: 800;
+  color: var(--lixo); line-height: 1; font-variant-numeric: tabular-nums;
+}
+.lixo-title-name { font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 700; color: var(--muted); }
+.lixo-title-hint { font-size: 10px; color: var(--faint); }
+
+.btn-bulk {
+  margin-left: auto;
+  background: none; border: 1px solid var(--border);
+  color: var(--muted); padding: 6px 14px; border-radius: 6px;
+  font-size: 12px; cursor: pointer; font-family: inherit;
+  transition: all 0.15s; white-space: nowrap;
+}
+.btn-bulk:hover { color: var(--text); border-color: var(--lixo); background: rgba(90,85,81,0.12); }
+.btn-bulk:disabled { opacity: 0.3; cursor: default; }
+
+.checkbox {
+  width: 15px; height: 15px; border-radius: 4px;
+  border: 1px solid var(--dim); cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: var(--text); line-height: 1;
+  transition: all 0.1s; background: none; font-family: inherit;
+  padding: 0;
+}
+.checkbox.on { background: var(--lixo); border-color: var(--lixo); }
+
+.lixo-row {
+  display: flex; align-items: center; gap: 11px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #1E1C19;
+  transition: background 0.1s, opacity 0.35s, transform 0.35s;
+}
+.lixo-row:last-child { border-bottom: none; }
+.lixo-row:hover { background: var(--card-hover); }
+.lixo-row.selected { background: rgba(90,85,81,0.09); }
+.lixo-row.leaving { opacity: 0; transform: translateX(24px); }
+.lr-sender { font-size: 11px; color: var(--faint); width: 130px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lr-subject { font-size: 12px; color: #6B6560; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.lr-date { font-size: 10px; font-family: var(--mono); color: var(--dim); flex-shrink: 0; }
+.lr-moves { display: flex; gap: 4px; opacity: 0; transition: opacity 0.12s; flex-shrink: 0; }
+.lixo-row:hover .lr-moves { opacity: 1; }
+.lr-move {
+  background: none; border: 1px solid var(--border);
+  color: var(--muted); font-size: 10px; padding: 2px 8px;
+  border-radius: 4px; cursor: pointer; font-family: inherit; transition: all 0.1s;
+}
+.lr-move.to-alta:hover { color: var(--alta); border-color: rgba(255,82,82,0.4); }
+.lr-move.to-media:hover { color: var(--media); border-color: rgba(245,166,35,0.4); }
+
+.empty { text-align: center; padding: 28px; font-size: 12px; color: var(--dim); }
+
+/* toast */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+  background: #22201C; border: 1px solid #3A3630; border-radius: 8px;
+  padding: 10px 18px; font-size: 12.5px; color: var(--text);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5); z-index: 100;
+  transition: transform 0.25s ease;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+.preview-tag {
+  font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--bg); background: var(--blue);
+  padding: 2px 7px; border-radius: 3px; font-weight: 800;
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <span class="logo">Smart<em>Inbox</em></span>
+  <span class="preview-tag">Prévia</span>
+  <span class="header-info" id="info">40 não lidos · dados reais de 15 jul</span>
+  <div class="precision"><span class="precision-dot"></span><span id="prec">—</span>&nbsp;precisão</div>
+  <button class="btn-refresh" id="refreshBtn" onclick="doRefresh()"><span class="spin">↻</span> Atualizar caixa</button>
+</header>
+
+<div class="stats">
+  <div class="stat"><span class="stat-count" id="c-alta" style="background:rgba(255,82,82,0.12);color:var(--alta)">0</span><span class="stat-label">Alta Prioridade</span></div>
+  <div class="stat-sep"></div>
+  <div class="stat"><span class="stat-count" id="c-media" style="background:rgba(245,166,35,0.12);color:var(--media)">0</span><span class="stat-label">Média</span></div>
+  <div class="stat-sep"></div>
+  <div class="stat"><span class="stat-count" id="c-lixo" style="background:rgba(90,85,81,0.2);color:#8A8480">0</span><span class="stat-label">Lixo</span></div>
+  <span class="stats-total" id="total"></span>
+</div>
+
+<main class="main">
+  <div class="columns">
+    <div class="col col-alta">
+      <div class="col-head">
+        <span class="col-num" id="n-alta">0</span>
+        <div><div class="col-name">Alta Prioridade</div><div class="col-hint">ação imediata</div></div>
+      </div>
+      <div id="list-alta"></div>
+    </div>
+    <div class="col col-media">
+      <div class="col-head">
+        <span class="col-num" id="n-media">0</span>
+        <div><div class="col-name">Média</div><div class="col-hint">verificar hoje</div></div>
+      </div>
+      <div id="list-media"></div>
+    </div>
+  </div>
+
+  <section class="lixo-section">
+    <div class="lixo-head">
+      <button class="checkbox" id="cbAll" onclick="toggleAll()"></button>
+      <span class="lixo-num" id="n-lixo">0</span>
+      <div>
+        <div class="lixo-title-name">Lixo</div>
+        <div class="lixo-title-hint">newsletters · cold outreach · automáticos — bata o olho e limpe</div>
+      </div>
+      <button class="btn-bulk" id="bulkBtn" onclick="bulkMarkRead()">Marcar todos como lido</button>
+    </div>
+    <div id="list-lixo"></div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══ Dados reais da triagem de 15/jul ══════════════════
+const DATA = {
+  alta: [
+    { id:'a1', sender:'Eduardo Abreu', email:'eduardo.abreu@adsplay.com.br', subject:'Fwd: Adsplay <> WPP', snippet:'Encaminhei a thread da parceria — precisamos dar retorno.', date:'24 jun' },
+    { id:'a2', sender:'Google Workspace', email:'google-workspace-alerts-noreply@google.com', subject:'Alerta: redefinição de senha de superadmin — vanessa.viana', snippet:'Senha redefinida por gabriela.esposito às 13:30 UTC.', date:'24 jun' },
+    { id:'a3', sender:'Você (lembrete)', email:'bruno@adsplay.com.br', subject:'Azerion — pegar status do que rodamos e por que travamos', snippet:'Duas respostas do Danilo sem retorno. Ver com Rodrigo e Bigode.', date:'24 jun' },
+    { id:'a4', sender:'Você (lembrete)', email:'bruno@adsplay.com.br', subject:'Pesquisa — Produto Pixel', snippet:'Entregamos o que as pessoas precisam? Criador de campanhas por chat (IA).', date:'24 jun' },
+    { id:'a5', sender:'João Paulo Villardo', email:'villardojoaopaulo26@gmail.com', subject:'Updated invitation: Telas Noronha @ qui 16 jul, 16:30', snippet:'Convite atualizado — reunião amanhã com Henrique e Alex.', date:'8 jul' },
+    { id:'a6', sender:'Vanessa Andrade', email:'vanessa@adsplay.com.br', subject:'Invitation: CNP_Apresentação Perfil do Líder ideal @ 12 ago', snippet:'Convite para agosto — precisa responder.', date:'6 jul' },
+  ],
+  media: [
+    { id:'m1', sender:'QultureRocks', email:'help@qulturerocks.com', subject:'Parte do seu time ainda não criou um PDI', snippet:'Relatórios Individuais de Avaliação de Cultura (Líderes) disponíveis.', date:'24 jun' },
+    { id:'m2', sender:'Você (lembrete)', email:'bruno.oliveira.dj@gmail.com', subject:'Conferir parcela em aberto do IPTU de Ibiúna', snippet:'Verificar possível parcela em atraso.', date:'24 jun' },
+    { id:'m3', sender:'Sabrina Marques (SHAR)', email:'sabrina.marques@shar.com.br', subject:'Proposta objetiva para as próximas ações da Pixel Roads', snippet:'Integrações com a AdsPlay e expansão para novos mercados…', date:'24 jun' },
+    { id:'m4', sender:'Anthropic', email:'no-reply@mail.anthropic.com', subject:'Nova atividade na sua equipe Claude', snippet:'Gerencie sua equipe nas configurações de administrador.', date:'24 jun' },
+    { id:'m5', sender:'Meta for Business', email:'noreply@business-updates.facebook.com', subject:'Your ads were approved', snippet:'Your ads were approved and should begin delivering shortly.', date:'23 jun' },
+    { id:'m6', sender:'Leticia Fernandes (365)', email:'leticia.fernandes@the365group.com.br', subject:'Ops, Escorreguei — Lições aprendidas', snippet:'Novo momento nas reuniões gerais de líderes.', date:'23 jun' },
+    { id:'m7', sender:'Wiliam Dornelles', email:'wiliam.dornelles@a-players.io', subject:'Apresentação e ponto de contato — A-Players', snippet:'Novo responsável pelo relacionamento com sua empresa.', date:'23 jun' },
+    { id:'m8', sender:'David C. (HureonLabs)', email:'david.c@hureonlabs.com', subject:'Brand Lift data integration', snippet:'', date:'23 jun' },
+    { id:'m9', sender:'Xandr', email:'clientcomms@xandr.com', subject:'Microsoft Prebid Adapter — General Availability', snippet:'', date:'22 jun' },
+    { id:'m10', sender:'Igor — Portes Mídia', email:'igor@portesmidia.com.br', subject:'Cobertura Audiovisual | Ads Play | Mundo RD', snippet:'Vi que a Ads Play estará no Mundo RD…', date:'23 jun' },
+  ],
+  lixo: [
+    { id:'l1', sender:'Meio & Mensagem', subject:'Bradesco e Lovely ganham Ouro e Brasil soma 27 Leões', date:'24 jun' },
+    { id:'l2', sender:'Legend Malik (spam)', subject:'"We are providing writing+posting" — planilha compartilhada', date:'23 jun' },
+    { id:'l3', sender:'Trust Filmes', subject:'Prender a atenção do público', date:'23 jun' },
+    { id:'l4', sender:'Conquiste 360', subject:'Conheça a Nova Plataforma de Premiação We Score', date:'23 jun' },
+    { id:'l5', sender:'Mercado Pago', subject:'Bruno, seu cartão Mercado Pago está te esperando! 😍', date:'23 jun' },
+    { id:'l6', sender:'FIFA', subject:'It’s make or break in the last eight', date:'8 jul' },
+    { id:'l7', sender:'FIFA', subject:'Thank you for being part of the FIFA World Cup 2026™!', date:'23 jun' },
+    { id:'l8', sender:'CBS Copenhagen', subject:'Convite: pesquisa de 5 minutos com lideranças empresariais', date:'23 jun' },
+    { id:'l9', sender:'Gmail', subject:'Delivery Status Notification (Failure)', date:'22 jun' },
+    { id:'l10', sender:'Google Ads', subject:'Continue no caminho certo para otimizar sua campanha', date:'22 jun' },
+    { id:'l11', sender:'G4 Educação', subject:'Esse convite não é para todo mundo', date:'22 jun' },
+    { id:'l12', sender:'G4 Tools', subject:'É HOJE: pare de crescer no escuro', date:'22 jun' },
+    { id:'l13', sender:'mkt@adsplay ×4', subject:'Bruno, é hoje às 18h — MÍDIACLASS', date:'22 jun' },
+    { id:'l14', sender:'Pipeline Capital ×3', subject:'Faça parte do Scape E-Commerce 2026', date:'22 jun' },
+    { id:'l15', sender:'Natalie (Datamatics)', subject:'Intro Meeting — Lead Generation & Data support', date:'22 jun' },
+    { id:'l16', sender:'Lincros', subject:'Seja bem-vindo à Lincros! Descomplicamos a logística', date:'23 jun' },
+    { id:'l17', sender:'Google Cloud', subject:'Your latest AI product roadmap briefing', date:'23 jun' },
+    { id:'l18', sender:'Google Ads (xwf)', subject:'Convite para consulta estratégica com especialista', date:'7 jul' },
+    { id:'l19', sender:'Alonso Adonis', subject:'No Mundo da IA 08', date:'23 jun' },
+    { id:'l20', sender:'megaoportunidades', subject:'Moderator’s spam report — fila de moderação', date:'23 jun' },
+    { id:'l21', sender:'Google Alerts', subject:'Alerta do Google — bruno oliveira adsplay', date:'23 jun' },
+    { id:'l22', sender:'Google Alerts', subject:'Alerta do Google — adsplay x', date:'23 jun' },
+    { id:'l23', sender:'FIFA', subject:'Get ready for your FIFA World Cup 2026™ match!', date:'22 jun' },
+    { id:'l24', sender:'Mercado Pago', subject:'¡Você já pode aproveitar o seu cartão 100% GRÁTIS! 🤩', date:'13 jun' },
+  ],
+};
+
+const AV = {A:'#5EADF7',B:'#7C6DF0',C:'#5BC9A8',D:'#F0907C',E:'#F0C85D',F:'#7FBA8A',G:'#9B8AF5',H:'#F57C7C',I:'#6DB8F5',J:'#F5A65D',K:'#78C88A',L:'#C87CF0',M:'#F07C9B',N:'#5DC9C9',O:'#F5CF5D',P:'#8AB4F0',Q:'#F09B5D',R:'#7CF07C',S:'#F05D5D',T:'#5DC9F0',U:'#B07CF0',V:'#F0D07C',W:'#7CF0C8',X:'#F07CB0',Y:'#90C85D',Z:'#F07C5D'};
+const CAT_COLOR = { alta:'#FF5252', media:'#F5A623', lixo:'#5A5551' };
+const CAT_LABEL = { alta:'Alta Prioridade', media:'Média', lixo:'Lixo' };
+
+let fbTotal = 0, fbCorrect = 0;
+const selected = new Set();
+
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const avColor = s => AV[s.charAt(0).toUpperCase()] || '#7D7872';
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+function updateCounters() {
+  document.getElementById('c-alta').textContent = DATA.alta.length;
+  document.getElementById('c-media').textContent = DATA.media.length;
+  document.getElementById('c-lixo').textContent = DATA.lixo.length;
+  document.getElementById('n-alta').textContent = DATA.alta.length;
+  document.getElementById('n-media').textContent = DATA.media.length;
+  document.getElementById('n-lixo').textContent = DATA.lixo.length;
+  const total = DATA.alta.length + DATA.media.length + DATA.lixo.length;
+  document.getElementById('total').textContent = `${total} emails · ${fbTotal} feedback${fbTotal !== 1 ? 's' : ''}`;
+  document.getElementById('prec').textContent = fbTotal === 0 ? '—' : Math.round(fbCorrect / fbTotal * 100) + '%';
+  const bulk = document.getElementById('bulkBtn');
+  bulk.textContent = selected.size > 0 ? `Marcar ${selected.size} como lido` : 'Marcar todos como lido';
+  bulk.disabled = DATA.lixo.length === 0;
+}
+
+function cardHTML(e, cat) {
+  const others = ['alta','media','lixo'].filter(c => c !== cat);
+  return `
+  <div class="card" id="card-${e.id}">
+    <div class="card-top">
+      <span class="avatar" style="background:${avColor(e.sender)}">${esc(e.sender.charAt(0).toUpperCase())}</span>
+      <span class="sender">${esc(e.sender)}</span>
+      <span class="date">${esc(e.date)}</span>
+    </div>
+    <div class="subject">${esc(e.subject)}</div>
+    ${e.snippet ? `<div class="snippet">${esc(e.snippet)}</div>` : ''}
+    <div class="actions">
+      <button class="act ok" onclick="confirmCard('${e.id}')">👍 Correto</button>
+      <div class="menu-wrap">
+        <button class="act ng" onclick="toggleMenu(event,'${e.id}')">👎 Errado</button>
+        <div class="menu" id="menu-${e.id}">
+          <div class="menu-label">Mover para</div>
+          ${others.map(c => `<div class="menu-item" onclick="moveCard('${e.id}','${cat}','${c}')"><span class="mi-dot" style="background:${CAT_COLOR[c]}"></span>${CAT_LABEL[c]}</div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function lixoRowHTML(e) {
+  return `
+  <div class="lixo-row ${selected.has(e.id) ? 'selected' : ''}" id="row-${e.id}">
+    <button class="checkbox ${selected.has(e.id) ? 'on' : ''}" onclick="toggleSel('${e.id}')">${selected.has(e.id) ? '✓' : ''}</button>
+    <span class="lr-sender">${esc(e.sender)}</span>
+    <span class="lr-subject">${esc(e.subject)}</span>
+    <span class="lr-date">${esc(e.date)}</span>
+    <span class="lr-moves">
+      <button class="lr-move to-alta" onclick="moveCard('${e.id}','lixo','alta')">→ Alta</button>
+      <button class="lr-move to-media" onclick="moveCard('${e.id}','lixo','media')">→ Média</button>
+    </span>
+  </div>`;
+}
+
+function render() {
+  document.getElementById('list-alta').innerHTML =
+    DATA.alta.length ? DATA.alta.map(e => cardHTML(e, 'alta')).join('') : '<div class="empty">Nenhum email aqui.</div>';
+  document.getElementById('list-media').innerHTML =
+    DATA.media.length ? DATA.media.map(e => cardHTML(e, 'media')).join('') : '<div class="empty">Nenhum email aqui.</div>';
+  document.getElementById('list-lixo').innerHTML =
+    DATA.lixo.length ? DATA.lixo.map(lixoRowHTML).join('') : '<div class="empty">Lixo zerado — caixa limpa ✨</div>';
+  const cbAll = document.getElementById('cbAll');
+  const all = DATA.lixo.length > 0 && selected.size === DATA.lixo.length;
+  cbAll.classList.toggle('on', all);
+  cbAll.textContent = all ? '✓' : '';
+  updateCounters();
+}
+
+// ── ações ──
+function confirmCard(id) {
+  fbTotal++; fbCorrect++;
+  const el = document.getElementById('card-' + id);
+  if (el) el.classList.add('done');
+  updateCounters();
+  toast('Feedback salvo: classificação confirmada 👍');
+}
+
+function toggleMenu(ev, id) {
+  ev.stopPropagation();
+  closeMenus();
+  document.getElementById('menu-' + id)?.classList.toggle('open');
+}
+function closeMenus() {
+  document.querySelectorAll('.menu.open').forEach(m => m.classList.remove('open'));
+}
+document.addEventListener('click', e => { if (!e.target.closest('.menu-wrap')) closeMenus(); });
+
+function moveCard(id, from, to) {
+  const idx = DATA[from].findIndex(e => e.id === id);
+  if (idx === -1) return;
+  const [e] = DATA[from].splice(idx, 1);
+  DATA[to].unshift(e);
+  selected.delete(id);
+  fbTotal++;
+  render();
+  toast(`Movido para ${CAT_LABEL[to]} — o sistema aprende com isso 🧠`);
+}
+
+function toggleSel(id) {
+  selected.has(id) ? selected.delete(id) : selected.add(id);
+  render();
+}
+function toggleAll() {
+  if (selected.size === DATA.lixo.length) selected.clear();
+  else DATA.lixo.forEach(e => selected.add(e.id));
+  render();
+}
+
+function bulkMarkRead() {
+  const ids = selected.size > 0 ? [...selected] : DATA.lixo.map(e => e.id);
+  ids.forEach(id => document.getElementById('row-' + id)?.classList.add('leaving'));
+  setTimeout(() => {
+    DATA.lixo = DATA.lixo.filter(e => !ids.includes(e.id));
+    selected.clear();
+    render();
+    toast(`${ids.length} email${ids.length > 1 ? 's' : ''} marcado${ids.length > 1 ? 's' : ''} como lido no Gmail ✓`);
+  }, 350);
+}
+
+function doRefresh() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('loading');
+  document.getElementById('info').textContent = 'buscando não lidos…';
+  setTimeout(() => {
+    document.getElementById('info').textContent = 'classificando com Claude…';
+    setTimeout(() => {
+      btn.classList.remove('loading');
+      document.getElementById('info').textContent = '40 não lidos · dados reais de 15 jul';
+      toast('Na versão conectada, isso busca o Gmail e reclassifica via Claude API');
+    }, 1200);
+  }, 900);
+}
+
+render();
+</script>
+</body>
+</html>
