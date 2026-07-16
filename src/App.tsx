@@ -15,6 +15,7 @@ const Playlists = lazy(() => import('./pages/Playlists').then(m => ({ default: m
 const Users = lazy(() => import('./pages/Users').then(m => ({ default: m.Users })));
 const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
 const Backup = lazy(() => import('./pages/Backup').then(m => ({ default: m.Backup })));
+const InboxPage = lazy(() => import('./pages/Inbox/InboxPage').then(m => ({ default: m.InboxPage })));
 
 function PageLoader() {
   return (
@@ -59,6 +60,8 @@ export default function App() {
                   <Navigate to="/admin" replace />
                 </AuthGuard>
               } />
+
+              <Route path="/inbox" element={<InboxPage />} />
 
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
