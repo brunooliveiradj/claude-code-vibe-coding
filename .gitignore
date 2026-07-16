@@ -7,3 +7,8 @@ coverage/
 .env*
 !.env.example
 firebase-applet-config.json
+
+# Smart Inbox local data
+data/
+.env.local
+.env
