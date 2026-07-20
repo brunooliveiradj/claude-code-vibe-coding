@@ -520,7 +520,8 @@ function bulkMarkRead() {
     DATA.lixo = DATA.lixo.filter(e => !ids.includes(e.id));
     selected.clear();
     render();
-    toast(`${ids.length} email${ids.length > 1 ? 's' : ''} marcado${ids.length > 1 ? 's' : ''} como lido no Gmail ✓`);
+    const n = ids.length;
+    toast(`Prévia: ${n} email${n > 1 ? 's somem' : ' some'} só da tela. Na versão conectada, isso remove o marcador "não lida" no seu Gmail de verdade.`);
   }, 350);
 }
 
