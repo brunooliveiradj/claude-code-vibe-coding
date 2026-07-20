@@ -188,5 +188,12 @@ service cloud.firestore {
                           .hasOnly(['homeScore', 'awayScore', 'homePens', 'awayPens', 'status', 'time', 'updatedAt']));
       allow delete: if isContentManager();
     }
+
+    // Player control channel. Public read (TVs listen for a reload command);
+    // only admins can write (e.g. "Atualizar TVs" to push a new deploy).
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
   }
 }

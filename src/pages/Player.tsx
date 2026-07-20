@@ -876,6 +876,29 @@ export function Player() {
     };
   }, []);
 
+  // Remote refresh: the admin bumps config/player.reloadAt to force every
+  // connected TV to reload (picking up a new deploy). The first snapshot is
+  // the baseline; only a NEWER value triggers a reload. A cache-busting query
+  // param is used so even aggressive TV browsers fetch a fresh document.
+  useEffect(() => {
+    let baseline: number | null = null;
+    const unsub = onSnapshot(doc(db, 'config', 'player'), (snap) => {
+      const v = snap.exists() ? (Number(snap.data().reloadAt) || 0) : 0;
+      if (baseline === null) { baseline = v; return; }
+      if (v > baseline) {
+        baseline = v;
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.set('_r', String(v));
+          window.location.replace(url.toString());
+        } catch (e) {
+          window.location.reload();
+        }
+      }
+    }, (err) => console.error('config/player subscription error:', err));
+    return () => unsub();
+  }, []);
+
   // 1.1 Handle Wake Lock (Prevent screen from turning off)
   useEffect(() => {
     let wakeLock: any = null;
@@ -2773,32 +2796,34 @@ export function Player() {
                 .slice().sort((a: any, b: any) => (Number(b.titles) || 0) - (Number(a.titles) || 0));
               const maxT = ranking.reduce((m: number, r: any) => Math.max(m, Number(r.titles) || 0), 0);
               return (
-                <div className="w-full h-full bg-gradient-to-b from-white to-zinc-100 flex flex-col p-16 gap-8 relative overflow-hidden">
+                <div className="w-full h-full bg-gradient-to-b from-white to-zinc-100 flex flex-col items-center justify-center relative overflow-hidden" style={{ padding: '7vh 8vw' }}>
                   <div className="absolute top-0 left-0 right-0 h-3 bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-400" />
-                  <div className="flex items-center gap-5 relative z-10">
-                    <div className="w-20 h-20 bg-yellow-400/15 rounded-2xl flex items-center justify-center text-yellow-500"><Trophy size={40} /></div>
-                    <div>
-                      <h2 className="text-7xl font-black text-zinc-900 tracking-tighter leading-none">Maiores Campeões</h2>
-                      <p className="text-amber-600 font-black uppercase tracking-[0.3em] text-lg mt-2">Copa do Mundo FIFA · Títulos por Seleção</p>
+                  <div className="w-full max-w-4xl flex flex-col gap-6 relative z-10 min-h-0">
+                    <div className="flex items-center gap-4 justify-center text-center">
+                      <div className="w-14 h-14 bg-yellow-400/15 rounded-2xl flex items-center justify-center text-yellow-500 shrink-0"><Trophy size={28} /></div>
+                      <div>
+                        <h2 className="text-5xl font-black text-zinc-900 tracking-tighter leading-none">Maiores Campeões</h2>
+                        <p className="text-amber-600 font-black uppercase tracking-[0.3em] text-xs mt-1.5">Copa do Mundo FIFA · Títulos por Seleção</p>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="flex-1 flex flex-col justify-center gap-3 relative z-10 min-h-0">
-                    {ranking.length === 0 ? (
-                      <div className="flex-1 flex items-center justify-center text-zinc-400 text-2xl font-bold">Nenhuma seleção cadastrada</div>
-                    ) : ranking.slice(0, 8).map((r: any, i: number) => {
-                      const titles = Number(r.titles) || 0;
-                      const top = titles === maxT;
-                      return (
-                        <div key={i} className={`rounded-[2rem] px-8 py-4 flex items-center gap-6 border-2 shadow-sm ${top ? 'bg-yellow-50 border-yellow-300' : 'bg-white border-zinc-200'}`}>
-                          <span className={`text-4xl font-black w-14 text-center shrink-0 ${top ? 'text-amber-500' : 'text-zinc-300'}`}>{i + 1}</span>
-                          <TeamFlag code={r.code} emoji={r.flag} imgClass="w-20 h-14" emojiClass="text-5xl" />
-                          <span className="text-4xl font-black text-zinc-900 flex-1 truncate">{r.team}</span>
-                          <span className="text-3xl tracking-tight shrink-0 whitespace-nowrap">{'⭐'.repeat(Math.min(titles, 6))}</span>
-                          <span className="text-3xl font-black text-zinc-900 w-40 text-right shrink-0">{titles} {titles === 1 ? 'título' : 'títulos'}</span>
-                        </div>
-                      );
-                    })}
+                    <div className="flex flex-col gap-2">
+                      {ranking.length === 0 ? (
+                        <div className="py-16 text-center text-zinc-400 text-2xl font-bold">Nenhuma seleção cadastrada</div>
+                      ) : ranking.slice(0, 8).map((r: any, i: number) => {
+                        const titles = Number(r.titles) || 0;
+                        const top = titles === maxT;
+                        return (
+                          <div key={i} className={`rounded-2xl px-6 py-3 flex items-center gap-5 border shadow-sm ${top ? 'bg-yellow-50 border-yellow-300' : 'bg-white border-zinc-200'}`}>
+                            <span className={`text-2xl font-black w-9 text-center shrink-0 ${top ? 'text-amber-500' : 'text-zinc-300'}`}>{i + 1}</span>
+                            <TeamFlag code={r.code} emoji={r.flag} imgClass="w-14 h-10" emojiClass="text-4xl" />
+                            <span className="text-3xl font-black text-zinc-900 flex-1 truncate">{r.team}</span>
+                            <span className="text-xl tracking-tight shrink-0 whitespace-nowrap hidden md:inline">{'⭐'.repeat(Math.min(titles, 6))}</span>
+                            <span className="text-2xl font-black text-zinc-900 w-32 text-right shrink-0">{titles} {titles === 1 ? 'título' : 'títulos'}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               );

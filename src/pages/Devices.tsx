@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search, RefreshCw, Tv, Trash2, ExternalLink, Copy, Edit2 } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../firebase';
-import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, addDoc, deleteDoc, doc, setDoc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 
 interface Device {
@@ -113,6 +113,21 @@ export function Devices() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  // Force every connected TV to reload (e.g. to pick up a new deploy).
+  const refreshAllTVs = async () => {
+    if (!window.confirm('Recarregar TODAS as TVs conectadas agora? Elas vão atualizar em alguns segundos.')) return;
+    setLoading(true);
+    try {
+      await setDoc(doc(db, 'config', 'player'), { reloadAt: Date.now() }, { merge: true });
+      setToast('Comando enviado! As TVs vão recarregar em instantes.');
+      setTimeout(() => setToast(null), 4000);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, 'config/player');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -125,7 +140,16 @@ export function Devices() {
           <p className="text-zinc-500 font-medium">Gerencie as TVs da Adsplay conectadas ao sistema.</p>
         </div>
         <div className="flex gap-3">
-          <button 
+          {isAdmin && (
+            <button
+              onClick={refreshAllTVs}
+              disabled={loading}
+              className="bg-zinc-100 text-zinc-900 px-6 py-3 rounded-xl flex items-center gap-2 font-bold hover:bg-zinc-200 transition-all disabled:opacity-50"
+            >
+              <RefreshCw size={18} /> Atualizar TVs
+            </button>
+          )}
+          <button
             onClick={copyGlobalLink}
             className="bg-zinc-100 text-zinc-900 px-6 py-3 rounded-xl flex items-center gap-2 font-bold hover:bg-zinc-200 transition-all"
           >
