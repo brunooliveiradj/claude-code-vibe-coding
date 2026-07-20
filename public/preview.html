@@ -91,9 +91,26 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .stats-total { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--dim); }
 
 /* ── MAIN ───────────────────────────────── */
-.main { flex: 1; overflow-y: auto; padding: 18px 20px; min-height: 0; }
+.main { position: relative; flex: 1; overflow-y: auto; padding: 18px 20px; min-height: 0; }
 .main::-webkit-scrollbar { width: 4px; }
 .main::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* loading overlay durante a atualização */
+.veil {
+  position: absolute; inset: 0; z-index: 50;
+  background: rgba(18,17,15,0.74); backdrop-filter: blur(2px);
+  display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+}
+.veil.show { display: flex; }
+.veil-spinner {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 2px solid var(--border); border-top-color: var(--blue);
+  animation: rot 0.75s linear infinite;
+}
+.veil-text { font-size: 12px; font-family: var(--mono); color: var(--muted); }
+
+@keyframes fadein { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+.main.flash .card, .main.flash .lixo-row { animation: fadein 0.4s ease both; }
 
 .columns {
   display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
@@ -283,6 +300,10 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 </div>
 
 <main class="main">
+  <div class="veil" id="veil">
+    <div class="veil-spinner"></div>
+    <div class="veil-text" id="veilText">Buscando não lidos no Gmail…</div>
+  </div>
   <div class="columns">
     <div class="col col-alta">
       <div class="col-head">
@@ -505,16 +526,32 @@ function bulkMarkRead() {
 
 function doRefresh() {
   const btn = document.getElementById('refreshBtn');
+  const veil = document.getElementById('veil');
+  const veilText = document.getElementById('veilText');
+  const info = document.getElementById('info');
+  const main = document.querySelector('.main');
+
   btn.classList.add('loading');
-  document.getElementById('info').textContent = 'buscando não lidos…';
+  btn.disabled = true;
+  veil.classList.add('show');
+  veilText.textContent = 'Buscando não lidos no Gmail…';
+  info.textContent = 'buscando não lidos…';
+
   setTimeout(() => {
-    document.getElementById('info').textContent = 'classificando com Claude…';
+    veilText.textContent = 'Classificando 40 emails com Claude…';
+    info.textContent = 'classificando com Claude…';
     setTimeout(() => {
+      veil.classList.remove('show');
       btn.classList.remove('loading');
-      document.getElementById('info').textContent = '40 não lidos · dados reais de 15 jul';
-      toast('Na versão conectada, isso busca o Gmail e reclassifica via Claude API');
-    }, 1200);
-  }, 900);
+      btn.disabled = false;
+      info.textContent = '40 não lidos · reclassificado agora';
+      // repaint visível: os cards fazem fade-in de novo
+      main.classList.add('flash');
+      render();
+      setTimeout(() => main.classList.remove('flash'), 500);
+      toast('Prévia: os dados são fixos, então a lista não muda. Na versão conectada isso busca o Gmail e reclassifica via Claude API.');
+    }, 1300);
+  }, 1000);
 }
 
 render();
