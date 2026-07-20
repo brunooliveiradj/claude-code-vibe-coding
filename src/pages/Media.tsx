@@ -9,7 +9,7 @@ import { GoogleGenAI } from "@google/genai";
 import { parseBaseImport, parseLooseJson, fetchWcPendingUpdates, fetchBrazilCampaign, matchDocId, matchupKey, WCMatch } from '../lib/worldcup';
 import imageCompression from 'browser-image-compression';
 
-type MediaType = 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'WEATHER' | 'NORTH_STAR' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES' | 'WC_BRAZIL' | 'WC_TODAY' | 'WC_BRACKET';
+type MediaType = 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'WEATHER' | 'NORTH_STAR' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES' | 'WC_BRAZIL' | 'WC_TODAY' | 'WC_BRACKET' | 'WC_RANKING';
 
 interface Media {
   id: string;
@@ -669,6 +669,7 @@ export function Media() {
       case 'WC_BRAZIL': return <Flag size={20} />;
       case 'WC_TODAY': return <Calendar size={20} />;
       case 'WC_BRACKET': return <Trophy size={20} />;
+      case 'WC_RANKING': return <Star size={20} />;
     }
   };
 
@@ -924,6 +925,13 @@ export function Media() {
                   <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">Chaveamento · Copa 2026</p>
                 </div>
               )}
+              {item.type === 'WC_RANKING' && (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#1a1400] to-[#0a0a0a] p-6 space-y-2 text-center">
+                  <Star size={32} className="text-yellow-400" style={{ filter: 'drop-shadow(0 0 10px rgba(250,204,21,0.6))' }} />
+                  <p className="text-sm font-black text-white leading-tight">Ranking por Títulos</p>
+                  <p className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest">{(item.payload.ranking || []).length} seleções · estrelas</p>
+                </div>
+              )}
               <div className="absolute top-3 left-3 bg-black/50 backdrop-blur-md text-white p-2 rounded-lg">
                 {getIcon(item.type)}
               </div>
@@ -1038,7 +1046,7 @@ export function Media() {
 
                 <div className="p-8 pt-6 flex-1 overflow-y-auto custom-scrollbar space-y-8">
                   <div className="grid grid-cols-10 gap-2">
-                    {(['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'MONTHLY_GOAL', 'CAROUSEL', 'NEWS_CLIPPING', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT', 'SMART_SALES', 'WC_BRAZIL', 'WC_TODAY', 'WC_BRACKET'] as MediaType[]).map((t) => (
+                    {(['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'MONTHLY_GOAL', 'CAROUSEL', 'NEWS_CLIPPING', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT', 'SMART_SALES', 'WC_BRAZIL', 'WC_TODAY', 'WC_BRACKET', 'WC_RANKING'] as MediaType[]).map((t) => (
                       <button
                         key={t}
                         type="button"
@@ -1082,13 +1090,25 @@ export function Media() {
                           if ((t === 'WC_BRAZIL' || t === 'WC_TODAY' || t === 'WC_BRACKET') && payload.autoRefresh === undefined) {
                             setPayload({ autoRefresh: true });
                           }
+                          if (t === 'WC_RANKING' && !payload.ranking) {
+                            setPayload({ ranking: [
+                              { team: 'Brasil', code: 'br', titles: 5 },
+                              { team: 'Alemanha', code: 'de', titles: 4 },
+                              { team: 'Itália', code: 'it', titles: 4 },
+                              { team: 'Argentina', code: 'ar', titles: 3 },
+                              { team: 'Espanha', code: 'es', titles: 2 },
+                              { team: 'França', code: 'fr', titles: 2 },
+                              { team: 'Uruguai', code: 'uy', titles: 2 },
+                              { team: 'Inglaterra', code: 'gb-eng', titles: 1 },
+                            ] });
+                          }
                         }}
                         className={`p-3 rounded-2xl border-2 transition-all flex flex-col items-center gap-2 ${
                           type === t ? 'border-zinc-900 bg-zinc-900 text-white' : 'border-zinc-100 text-zinc-500 hover:border-zinc-200'
                         }`}
                       >
                         {getIcon(t)}
-                        <span className="text-[7px] font-bold uppercase tracking-widest">{t === 'WC_BRAZIL' ? 'WC BRASIL' : t === 'WC_TODAY' ? 'WC HOJE' : t === 'WC_BRACKET' ? 'WC CHAVE' : t.split('_')[0]}</span>
+                        <span className="text-[7px] font-bold uppercase tracking-widest">{t === 'WC_BRAZIL' ? 'WC BRASIL' : t === 'WC_TODAY' ? 'WC HOJE' : t === 'WC_BRACKET' ? 'WC CHAVE' : t === 'WC_RANKING' ? 'WC RANKING' : t.split('_')[0]}</span>
                       </button>
                     ))}
                   </div>
@@ -2155,6 +2175,36 @@ export function Media() {
                         ))}
                       </div>
                     </div>
+                    );
+                  })()}
+
+                  {type === 'WC_RANKING' && (() => {
+                    const inputCls = "w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all";
+                    const list = payload.ranking || [];
+                    const set = (l: any[]) => setPayload({ ...payload, ranking: l });
+                    return (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3 p-4 bg-yellow-50 rounded-2xl border border-yellow-100">
+                          <Star size={26} className="text-yellow-500 shrink-0" />
+                          <div>
+                            <p className="text-xs font-black text-yellow-700 uppercase tracking-widest">Ranking por Títulos</p>
+                            <p className="text-[10px] text-yellow-600 font-medium">Seleções ordenadas por número de Copas (estrelas). Edite quando mudar.</p>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          {list.map((r: any, i: number) => (
+                            <div key={i} className="bg-zinc-50 p-3 rounded-2xl border border-zinc-100 grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
+                              <input className={inputCls} placeholder="Seleção" value={r.team || ''} onChange={e => { const l = [...list]; l[i] = { ...l[i], team: e.target.value }; set(l); }} />
+                              <input className={inputCls + ' w-24'} placeholder="País (br)" value={r.code || ''} onChange={e => { const l = [...list]; l[i] = { ...l[i], code: e.target.value }; set(l); }} />
+                              <input type="number" className={inputCls + ' w-20'} placeholder="Títulos" value={r.titles ?? ''} onChange={e => { const l = [...list]; l[i] = { ...l[i], titles: parseInt(e.target.value) || 0 }; set(l); }} />
+                              <button type="button" onClick={() => set(list.filter((_: any, j: number) => j !== i))} className="text-rose-500 hover:bg-rose-50 p-2 rounded-lg"><Trash2 size={14} /></button>
+                            </div>
+                          ))}
+                          <button type="button" onClick={() => set([...list, { team: '', code: '', titles: 1 }])} className="w-full py-3 border-2 border-dashed border-zinc-100 rounded-2xl flex items-center justify-center gap-2 text-zinc-400 hover:bg-zinc-50 transition-all">
+                            <Plus size={14} /><span className="text-[10px] font-black uppercase tracking-widest">Adicionar Seleção</span>
+                          </button>
+                        </div>
+                      </div>
                     );
                   })()}
 

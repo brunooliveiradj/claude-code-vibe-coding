@@ -66,7 +66,7 @@ import {
 interface Media {
   id: string;
   title: string;
-  type: 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'NORTH_STAR' | 'WEATHER' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES' | 'WC_BRAZIL' | 'WC_TODAY' | 'WC_BRACKET';
+  type: 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'NORTH_STAR' | 'WEATHER' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES' | 'WC_BRAZIL' | 'WC_TODAY' | 'WC_BRACKET' | 'WC_RANKING';
   payload: any;
 }
 
@@ -2730,10 +2730,28 @@ export function Player() {
                       {col('Quartas', qfL, 'qfl', 'qf')}
                       {col('Semifinais', sfL, 'sfl', 'sf')}
                       <div className="flex flex-col items-center justify-center gap-8 px-2 shrink-0" style={{ flexBasis: '260px' }}>
-                        <div className="w-full text-center">
-                          <h4 className="text-3xl font-black text-emerald-600 uppercase tracking-[0.2em] mb-3">Final</h4>
-                          {box(finalM, 999, 'final')}
-                        </div>
+                        {(() => {
+                          const fw = winner(finalM);
+                          if (!finalM || fw === 0) {
+                            return (
+                              <div className="w-full text-center">
+                                <h4 className="text-3xl font-black text-emerald-600 uppercase tracking-[0.2em] mb-3">Final</h4>
+                                {box(finalM, 999, 'final')}
+                              </div>
+                            );
+                          }
+                          const champName = fw === 1 ? finalM.home : finalM.away;
+                          const champCode = fw === 1 ? finalM.homeCode : finalM.awayCode;
+                          return (
+                            <div className="w-full text-center flex flex-col items-center gap-3">
+                              <div className="text-5xl">🏆</div>
+                              <h4 className="text-2xl font-black text-yellow-500 uppercase tracking-[0.25em]">Campeão do Mundo</h4>
+                              <TeamFlag code={champCode} imgClass="w-40 h-28" emojiClass="text-8xl" />
+                              <p className="text-4xl font-black text-zinc-900 tracking-tighter">{(champName || '').toUpperCase()}</p>
+                              <p className="text-sm font-black text-zinc-400 uppercase tracking-[0.3em]">FIFA 2026</p>
+                            </div>
+                          );
+                        })()}
                         <div className="w-full text-center">
                           <h4 className="text-xs font-black text-zinc-400 uppercase tracking-widest mb-1">Disputa do 3º Lugar</h4>
                           {box(thirdM, 998, 'third')}
@@ -2749,8 +2767,45 @@ export function Player() {
               );
             })()}
 
+            {/* World Cup — ranking by titles (stars) */}
+            {currentMedia.type === 'WC_RANKING' && (() => {
+              const ranking = (Array.isArray(currentMedia.payload?.ranking) ? currentMedia.payload.ranking : [])
+                .slice().sort((a: any, b: any) => (Number(b.titles) || 0) - (Number(a.titles) || 0));
+              const maxT = ranking.reduce((m: number, r: any) => Math.max(m, Number(r.titles) || 0), 0);
+              return (
+                <div className="w-full h-full bg-gradient-to-b from-white to-zinc-100 flex flex-col p-16 gap-8 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 right-0 h-3 bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-400" />
+                  <div className="flex items-center gap-5 relative z-10">
+                    <div className="w-20 h-20 bg-yellow-400/15 rounded-2xl flex items-center justify-center text-yellow-500"><Trophy size={40} /></div>
+                    <div>
+                      <h2 className="text-7xl font-black text-zinc-900 tracking-tighter leading-none">Maiores Campeões</h2>
+                      <p className="text-amber-600 font-black uppercase tracking-[0.3em] text-lg mt-2">Copa do Mundo FIFA · Títulos por Seleção</p>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 flex flex-col justify-center gap-3 relative z-10 min-h-0">
+                    {ranking.length === 0 ? (
+                      <div className="flex-1 flex items-center justify-center text-zinc-400 text-2xl font-bold">Nenhuma seleção cadastrada</div>
+                    ) : ranking.slice(0, 8).map((r: any, i: number) => {
+                      const titles = Number(r.titles) || 0;
+                      const top = titles === maxT;
+                      return (
+                        <div key={i} className={`rounded-[2rem] px-8 py-4 flex items-center gap-6 border-2 shadow-sm ${top ? 'bg-yellow-50 border-yellow-300' : 'bg-white border-zinc-200'}`}>
+                          <span className={`text-4xl font-black w-14 text-center shrink-0 ${top ? 'text-amber-500' : 'text-zinc-300'}`}>{i + 1}</span>
+                          <TeamFlag code={r.code} emoji={r.flag} imgClass="w-20 h-14" emojiClass="text-5xl" />
+                          <span className="text-4xl font-black text-zinc-900 flex-1 truncate">{r.team}</span>
+                          <span className="text-3xl tracking-tight shrink-0 whitespace-nowrap">{'⭐'.repeat(Math.min(titles, 6))}</span>
+                          <span className="text-3xl font-black text-zinc-900 w-40 text-right shrink-0">{titles} {titles === 1 ? 'título' : 'títulos'}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Unknown Media Type Fallback */}
-            {!['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'CAROUSEL', 'NEWS_CLIPPING', 'MONTHLY_GOAL', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT', 'SMART_SALES', 'WC_BRAZIL', 'WC_TODAY', 'WC_BRACKET'].includes(currentMedia.type) && (
+            {!['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'CAROUSEL', 'NEWS_CLIPPING', 'MONTHLY_GOAL', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT', 'SMART_SALES', 'WC_BRAZIL', 'WC_TODAY', 'WC_BRACKET', 'WC_RANKING'].includes(currentMedia.type) && (
               <div className="w-full h-full flex flex-col items-center justify-center text-white bg-zinc-900">
                 <p className="text-2xl font-bold">Tipo de mídia desconhecido</p>
                 <p className="text-zinc-500">{currentMedia.type}</p>
