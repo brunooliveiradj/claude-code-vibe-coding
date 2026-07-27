@@ -830,10 +830,10 @@ export function Media() {
                   <div>
                     <p className="text-xs font-bold text-white">North Star Metric</p>
                     <p className="text-[24px] font-black text-white mt-1">
-                      {((item.payload.adsplay || 0) + (item.payload.pixel || 0) + (item.payload.trigger || 0) + (item.payload.adsmax || 0))} / 1000
+                      {((item.payload.adsplay || 0) + (item.payload.pixel || 0) + (item.payload.trigger || 0) + (item.payload.adsmax || 0))}
                     </p>
                     <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">
-                      Campanhas Ativas
+                      Core + New · Campanhas
                     </p>
                   </div>
                 </div>
@@ -1078,8 +1078,8 @@ export function Media() {
                               ]
                             });
                           }
-                          if (t === 'NORTH_STAR' && !payload.adsplay) {
-                            setPayload({ ...payload, adsplay: 0, pixel: 0, trigger: 0, adsmax: 0 });
+                          if (t === 'NORTH_STAR' && payload.metaCoreGoal === undefined) {
+                            setPayload({ ...payload, adsplay: 0, pixel: 0, trigger: 0, adsmax: 0, metaCoreGoal: 150, metaPixelGoal: 500 });
                           }
                           if (t === 'FINAL_SPRINT') {
                             setPayload({ target: 100, current: 0, label: 'vendas', month: '', teamName: '' });
@@ -1796,98 +1796,44 @@ export function Media() {
                     </div>
                   )}
 
-                  {type === 'NORTH_STAR' && (
+                  {type === 'NORTH_STAR' && (() => {
+                    const fieldCls = "w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all font-bold";
+                    const numField = (label: string, key: string, def: number) => (
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">{label}</label>
+                        <input required type="number" value={Number(payload[key]) || def} onChange={(e) => setPayload({ ...payload, [key]: parseInt(e.target.value) || 0 })} className={fieldCls} />
+                      </div>
+                    );
+                    return (
                     <div className="space-y-6">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Meta do Ano Atual</label>
-                          <input 
-                            required
-                            type="number" 
-                            value={Number(payload.currentYearGoal) || 200}
-                            onChange={(e) => setPayload({ ...payload, currentYearGoal: parseInt(e.target.value) || 0 })}
-                            className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all font-bold"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Ano Atual</label>
-                          <input 
-                            required
-                            type="number" 
-                            value={Number(payload.currentYear) || new Date().getFullYear()}
-                            onChange={(e) => setPayload({ ...payload, currentYear: parseInt(e.target.value) || 0 })}
-                            className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all font-bold"
-                          />
+                      <div className="grid grid-cols-3 gap-4">
+                        {numField('Ano Atual', 'currentYear', new Date().getFullYear())}
+                        {numField('Meta Core (Prog+Trigger+Adsmax)', 'metaCoreGoal', 150)}
+                        {numField('Meta Pixel', 'metaPixelGoal', 500)}
+                      </div>
+
+                      {/* BU Core */}
+                      <div className="bg-adsplay/5 border border-adsplay/15 rounded-2xl p-4 space-y-3">
+                        <p className="text-xs font-black text-adsplay uppercase tracking-[0.2em]">BU Core</p>
+                        <div className="grid grid-cols-1 gap-4">
+                          {numField('Programática', 'adsplay', 0)}
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Meta North Star (Total)</label>
-                          <input 
-                            required
-                            type="number" 
-                            value={Number(payload.targetGoal) || 1000}
-                            onChange={(e) => setPayload({ ...payload, targetGoal: parseInt(e.target.value) || 0 })}
-                            className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all font-bold"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Ano Limite</label>
-                          <input 
-                            required
-                            type="number" 
-                            value={Number(payload.targetYear) || 2030}
-                            onChange={(e) => setPayload({ ...payload, targetYear: parseInt(e.target.value) || 0 })}
-                            className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all font-bold"
-                          />
+                      {/* BU New */}
+                      <div className="bg-purple-500/5 border border-purple-500/15 rounded-2xl p-4 space-y-3">
+                        <p className="text-xs font-black text-purple-500 uppercase tracking-[0.2em]">BU New</p>
+                        <div className="grid grid-cols-3 gap-4">
+                          {numField('Trigger', 'trigger', 0)}
+                          {numField('Adsmax', 'adsmax', 0)}
+                          {numField('Pixel', 'pixel', 0)}
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-4 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Adsplay</label>
-                          <input 
-                            required
-                            type="number" 
-                            value={Number(payload.adsplay) || 0}
-                            onChange={(e) => setPayload({ ...payload, adsplay: parseInt(e.target.value) || 0 })}
-                            className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all font-bold"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Pixel</label>
-                          <input 
-                            required
-                            type="number" 
-                            value={Number(payload.pixel) || 0}
-                            onChange={(e) => setPayload({ ...payload, pixel: parseInt(e.target.value) || 0 })}
-                            className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all font-bold"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Trigger</label>
-                          <input 
-                            required
-                            type="number" 
-                            value={Number(payload.trigger) || 0}
-                            onChange={(e) => setPayload({ ...payload, trigger: parseInt(e.target.value) || 0 })}
-                            className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all font-bold"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">AdsMax</label>
-                          <input 
-                            required
-                            type="number" 
-                            value={Number(payload.adsmax) || 0}
-                            onChange={(e) => setPayload({ ...payload, adsmax: parseInt(e.target.value) || 0 })}
-                            className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all font-bold"
-                          />
-                        </div>
-                      </div>
+                      <p className="text-[10px] text-zinc-400 font-medium">A variação % (vs. última atualização) é registrada automaticamente ao salvar. "Programática" corresponde ao antigo "Adsplay".</p>
                     </div>
-                  )}
+                    );
+                  })()}
 
                   {type === 'FINAL_SPRINT' && (
                     <div className="space-y-6">

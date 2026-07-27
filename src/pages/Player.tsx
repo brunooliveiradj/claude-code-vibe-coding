@@ -1814,190 +1814,109 @@ export function Player() {
         </div>
       )}
 
-            {currentMedia.type === 'NORTH_STAR' && (
-              <div className="w-full h-full bg-[#050505] flex items-center justify-center p-24 relative overflow-hidden">
-                {/* Background Decoration */}
-                <div className="absolute top-0 right-0 w-[80vw] h-[80vw] bg-adsplay/10 blur-[150px] rounded-full -translate-y-1/2 translate-x-1/4" />
-                <div className="absolute bottom-0 left-0 w-[60vw] h-[60vw] bg-purple-500/10 blur-[120px] rounded-full translate-y-1/2 -translate-x-1/4" />
+            {currentMedia.type === 'NORTH_STAR' && (() => {
+              const p = currentMedia.payload || {};
+              const prog = Number(p.adsplay) || 0;   // "Programática" (Core)
+              const trig = Number(p.trigger) || 0;
+              const amax = Number(p.adsmax) || 0;
+              const pix = Number(p.pixel) || 0;
+              const pm = p.prevMetrics;
+              const metaCore = Number(p.metaCoreGoal) || 150;   // Programática + Trigger + Adsmax
+              const metaPix = Number(p.metaPixelGoal) || 500;   // Pixel
+              const coreSum = prog + trig + amax;               // feeds the 150 meta
+              const newBuTotal = trig + amax + pix;             // New BU (visual)
+              const grand = prog + trig + amax + pix;
+              const prevGrand = pm ? (Number(pm.adsplay) || 0) + (Number(pm.trigger) || 0) + (Number(pm.adsmax) || 0) + (Number(pm.pixel) || 0) : null;
+              const prevCore = pm ? (Number(pm.adsplay) || 0) + (Number(pm.trigger) || 0) + (Number(pm.adsmax) || 0) : null;
 
-                <div className="w-full max-w-7xl space-y-20 relative z-10">
-                  <div className="text-center space-y-6">
-                    <div className="flex items-center justify-center gap-4">
-                      <div className="w-16 h-16 bg-adsplay/20 rounded-2xl flex items-center justify-center text-adsplay">
-                        <TrendingUp size={32} />
+              const card = (label: string, value: number, prevVal?: number | null) => (
+                <div className="bg-zinc-900/40 p-6 rounded-[2rem] border border-white/5 flex flex-col items-center gap-2 text-center backdrop-blur-xl">
+                  <p className="text-zinc-500 font-black uppercase tracking-widest text-sm">{label}</p>
+                  <div className="text-6xl font-black text-white tracking-tighter"><Counter value={value} /></div>
+                  <NSDelta prev={prevVal} cur={value} size="text-xs" />
+                  <p className="text-zinc-600 font-bold uppercase tracking-widest text-[10px]">Campanhas</p>
+                </div>
+              );
+
+              const metaBar = (title: string, sub: string, value: number, goal: number, grad: string) => {
+                const pct = goal > 0 ? Math.round((value / goal) * 100) : 0;
+                return (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-end px-1">
+                      <div>
+                        <p className="text-white font-black uppercase tracking-widest text-xl">{title}</p>
+                        <p className="text-zinc-600 font-bold uppercase tracking-widest text-[10px] mt-1">{sub}</p>
                       </div>
-                      <span className="text-2xl font-black uppercase tracking-[0.5em] text-adsplay">North Star Metric</span>
+                      <div className="text-right">
+                        <p className="text-4xl font-black text-white leading-none"><Counter value={value} /> <span className="text-zinc-500 text-2xl">/ {goal}</span></p>
+                        <p className="text-zinc-500 font-black text-sm mt-1">{Math.min(100, pct)}% · faltam {Math.max(0, goal - value)}</p>
+                      </div>
                     </div>
-                    <h2 className="text-9xl font-black text-white tracking-tighter leading-none">
-                      Meta de {currentMedia.payload.currentYear || new Date().getFullYear()}<span className="text-adsplay">.</span>
-                    </h2>
-                    <div className="flex flex-col items-center gap-4">
-                      <p className="text-4xl text-white font-bold tracking-widest uppercase">
-                        {currentMedia.payload.currentYearGoal || 200} campanhas ativas este ano
-                      </p>
-                      <p className="text-xl text-zinc-500 font-bold tracking-[0.3em] uppercase border-t border-white/10 pt-4">
-                        Objetivo North Star: {currentMedia.payload.targetGoal || 1000} campanhas até {currentMedia.payload.targetYear || 2030}
-                      </p>
+                    <div className="h-5 w-full bg-zinc-900 rounded-full p-1.5 border border-white/5 overflow-hidden">
+                      <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, pct)}%` }} transition={{ duration: 2, ease: 'easeOut' }} className={`h-full bg-gradient-to-r ${grad} rounded-full`} />
                     </div>
                   </div>
+                );
+              };
 
-                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-8 items-center">
-                    {/* Adsplay Card */}
-                    <div className="bg-zinc-900/40 p-8 rounded-[3rem] border border-white/5 space-y-4 text-center backdrop-blur-xl">
-                      <p className="text-zinc-500 font-black uppercase tracking-widest text-lg">Adsplay</p>
-                      <div className="text-7xl font-black text-white tracking-tighter">
-                        <Counter value={Number(currentMedia.payload.adsplay) || 0} />
-                      </div>
-                      <NSDelta prev={currentMedia.payload.prevMetrics?.adsplay} cur={Number(currentMedia.payload.adsplay) || 0} />
-                      <p className="text-zinc-600 font-bold uppercase tracking-widest text-xs">Campanhas Ativas</p>
-                    </div>
+              return (
+                <div className="w-full h-full bg-[#050505] flex items-center justify-center p-16 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-[70vw] h-[70vw] bg-adsplay/10 blur-[140px] rounded-full -translate-y-1/2 translate-x-1/4" />
+                  <div className="absolute bottom-0 left-0 w-[50vw] h-[50vw] bg-purple-500/10 blur-[120px] rounded-full translate-y-1/2 -translate-x-1/4" />
 
-                    {/* Pixel Card */}
-                    <div className="bg-zinc-900/40 p-8 rounded-[3rem] border border-white/5 space-y-4 text-center backdrop-blur-xl">
-                      <p className="text-zinc-500 font-black uppercase tracking-widest text-lg">Pixel</p>
-                      <div className="text-7xl font-black text-white tracking-tighter">
-                        <Counter value={Number(currentMedia.payload.pixel) || 0} />
-                      </div>
-                      <NSDelta prev={currentMedia.payload.prevMetrics?.pixel} cur={Number(currentMedia.payload.pixel) || 0} />
-                      <p className="text-zinc-600 font-bold uppercase tracking-widest text-xs">Campanhas Ativas</p>
-                    </div>
-
-                    {/* Trigger Card */}
-                    <div className="bg-zinc-900/40 p-8 rounded-[3rem] border border-white/5 space-y-4 text-center backdrop-blur-xl">
-                      <p className="text-zinc-500 font-black uppercase tracking-widest text-lg">Trigger</p>
-                      <div className="text-7xl font-black text-white tracking-tighter">
-                        <Counter value={Number(currentMedia.payload.trigger) || 0} />
-                      </div>
-                      <NSDelta prev={currentMedia.payload.prevMetrics?.trigger} cur={Number(currentMedia.payload.trigger) || 0} />
-                      <p className="text-zinc-600 font-bold uppercase tracking-widest text-xs">Campanhas Ativas</p>
-                    </div>
-
-                    {/* AdsMax Card */}
-                    <div className="bg-zinc-900/40 p-8 rounded-[3rem] border border-white/5 space-y-4 text-center backdrop-blur-xl">
-                      <p className="text-zinc-500 font-black uppercase tracking-widest text-lg">AdsMax</p>
-                      <div className="text-7xl font-black text-white tracking-tighter">
-                        <Counter value={Number(currentMedia.payload.adsmax) || 0} />
-                      </div>
-                      <NSDelta prev={currentMedia.payload.prevMetrics?.adsmax} cur={Number(currentMedia.payload.adsmax) || 0} />
-                      <p className="text-zinc-600 font-bold uppercase tracking-widest text-xs">Campanhas Ativas</p>
-                    </div>
-
-                    {/* Total Center Piece */}
-                    <div className="relative flex flex-col items-center justify-center py-8 col-span-2 lg:col-span-1">
-                      <div className="absolute inset-0 bg-adsplay/20 blur-[80px] rounded-full animate-pulse" />
-                      <div className="relative space-y-2 text-center">
-                        <p className="text-adsplay font-black uppercase tracking-[0.4em] text-xl">Total Geral</p>
-                        <div className="text-[10rem] font-black text-white leading-none tracking-tighter">
-                          {(() => {
-                            const sum = (Number(currentMedia.payload.adsplay) || 0) + 
-                                        (Number(currentMedia.payload.pixel) || 0) + 
-                                        (Number(currentMedia.payload.trigger) || 0) + 
-                                        (Number(currentMedia.payload.adsmax) || 0);
-                            return <Counter value={sum} />;
-                          })()}
+                  <div className="w-full max-w-7xl space-y-10 relative z-10">
+                    {/* Header */}
+                    <div className="flex items-end justify-between gap-8">
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-adsplay/20 rounded-2xl flex items-center justify-center text-adsplay"><TrendingUp size={26} /></div>
+                          <span className="text-lg font-black uppercase tracking-[0.4em] text-adsplay">North Star Metric</span>
                         </div>
-                        <div className="flex items-center justify-center gap-4">
-                          <div className="h-1 w-16 bg-zinc-800 rounded-full" />
-                          <span className="text-zinc-400 font-black text-3xl tracking-tighter">/ {Number(currentMedia.payload.currentYearGoal) || 200}</span>
-                          <div className="h-1 w-16 bg-zinc-800 rounded-full" />
-                        </div>
-                        {(() => {
-                          const pm = currentMedia.payload.prevMetrics;
-                          if (!pm) return null;
-                          const prevSum = (Number(pm.adsplay) || 0) + (Number(pm.pixel) || 0) + (Number(pm.trigger) || 0) + (Number(pm.adsmax) || 0);
-                          const curSum = (Number(currentMedia.payload.adsplay) || 0) + (Number(currentMedia.payload.pixel) || 0) + (Number(currentMedia.payload.trigger) || 0) + (Number(currentMedia.payload.adsmax) || 0);
-                          return (
-                            <div className="flex flex-col items-center gap-2 pt-2">
-                              <NSDelta prev={prevSum} cur={curSum} size="text-2xl" />
-                              <span className="text-zinc-600 font-bold uppercase tracking-[0.2em] text-[10px]">vs. última atualização</span>
-                            </div>
-                          );
-                        })()}
+                        <h2 className="text-7xl font-black text-white tracking-tighter leading-none">Meta de {p.currentYear || new Date().getFullYear()}<span className="text-adsplay">.</span></h2>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-zinc-500 font-black uppercase tracking-[0.3em] text-xs">Total Geral</p>
+                        <div className="text-7xl font-black text-white leading-none tracking-tighter"><Counter value={grand} /></div>
+                        {prevGrand != null && (
+                          <div className="flex items-center justify-end gap-2 mt-2">
+                            <NSDelta prev={prevGrand} cur={grand} size="text-base" />
+                            <span className="text-zinc-600 font-bold uppercase tracking-[0.15em] text-[9px]">vs. última</span>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
 
-                  {/* Progress Bars */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                    {/* Current Year Progress */}
-                    {(() => {
-                      const sum = (Number(currentMedia.payload.adsplay) || 0) + 
-                                  (Number(currentMedia.payload.pixel) || 0) + 
-                                  (Number(currentMedia.payload.trigger) || 0) + 
-                                  (Number(currentMedia.payload.adsmax) || 0);
-                      const goal = Number(currentMedia.payload.currentYearGoal) || 200;
-                      const rawYearPercentage = Math.round((sum / goal) * 100);
-                      const yearPercentage = isNaN(rawYearPercentage) ? 0 : rawYearPercentage;
-                      
-                      return (
-                        <div className="space-y-6">
-                          <div className="flex justify-between items-end px-4">
-                            <div className="space-y-1">
-                              <p className="text-zinc-500 font-black uppercase tracking-widest text-sm">Progresso {currentMedia.payload.currentYear || new Date().getFullYear()}</p>
-                              <p className="text-4xl font-black text-white">
-                                <Counter value={yearPercentage} />%
-                              </p>
-                            </div>
-                            <div className="text-right space-y-1">
-                              <p className="text-zinc-500 font-black uppercase tracking-widest text-sm">Faltam para Meta {currentMedia.payload.currentYear || new Date().getFullYear()}</p>
-                              <p className="text-4xl font-black text-adsplay">
-                                <Counter value={Math.max(0, goal - sum)} />
-                              </p>
-                            </div>
-                          </div>
-                          <div className="h-6 w-full bg-zinc-900 rounded-full p-1.5 border border-white/5 overflow-hidden">
-                            <motion.div 
-                              initial={{ width: 0 }}
-                              animate={{ width: `${Math.min(100, yearPercentage)}%` }}
-                              transition={{ duration: 2, ease: "easeOut" }}
-                              className="h-full bg-gradient-to-r from-adsplay to-emerald-500 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.3)]"
-                            />
-                          </div>
+                    {/* BUs */}
+                    <div className="grid grid-cols-1 lg:grid-cols-[1fr_3fr] gap-6">
+                      <div className="bg-white/[0.02] rounded-[2.5rem] border border-adsplay/20 p-5 space-y-4">
+                        <div className="flex items-baseline justify-between px-1">
+                          <span className="text-adsplay font-black uppercase tracking-[0.3em] text-lg">Core</span>
+                          <span className="text-zinc-500 font-bold text-xs uppercase tracking-widest">Total <span className="text-white font-black text-lg">{prog}</span></span>
                         </div>
-                      );
-                    })()}
-
-                    {/* North Star Progress */}
-                    {(() => {
-                      const sum = (Number(currentMedia.payload.adsplay) || 0) + 
-                                  (Number(currentMedia.payload.pixel) || 0) + 
-                                  (Number(currentMedia.payload.trigger) || 0) + 
-                                  (Number(currentMedia.payload.adsmax) || 0);
-                      const target = Number(currentMedia.payload.targetGoal) || 1000;
-                      const rawNorthStarPercentage = Math.round((sum / target) * 100);
-                      const nsPercentage = isNaN(rawNorthStarPercentage) ? 0 : rawNorthStarPercentage;
-
-                      return (
-                        <div className="space-y-6">
-                          <div className="flex justify-between items-end px-4">
-                            <div className="space-y-1">
-                              <p className="text-zinc-500 font-black uppercase tracking-widest text-sm">Progresso North Star</p>
-                              <p className="text-4xl font-black text-white">
-                                <Counter value={nsPercentage} />%
-                              </p>
-                            </div>
-                            <div className="text-right space-y-1">
-                              <p className="text-zinc-500 font-black uppercase tracking-widest text-sm">Faltam para {currentMedia.payload.targetYear || 2030}</p>
-                              <p className="text-4xl font-black text-purple-500">
-                                <Counter value={Math.max(0, target - sum)} />
-                              </p>
-                            </div>
-                          </div>
-                          <div className="h-6 w-full bg-zinc-900 rounded-full p-1.5 border border-white/5 overflow-hidden">
-                            <motion.div 
-                              initial={{ width: 0 }}
-                              animate={{ width: `${Math.min(100, nsPercentage)}%` }}
-                              transition={{ duration: 2, ease: "easeOut" }}
-                              className="h-full bg-gradient-to-r from-purple-600 to-adsplay rounded-full shadow-[0_0_20px_rgba(147,51,234,0.3)]"
-                            />
-                          </div>
+                        {card('Programática', prog, pm?.adsplay)}
+                      </div>
+                      <div className="bg-white/[0.02] rounded-[2.5rem] border border-purple-500/20 p-5 space-y-4">
+                        <div className="flex items-baseline justify-between px-1">
+                          <span className="text-purple-400 font-black uppercase tracking-[0.3em] text-lg">New</span>
+                          <span className="text-zinc-500 font-bold text-xs uppercase tracking-widest">Total <span className="text-white font-black text-lg">{newBuTotal}</span></span>
                         </div>
-                      );
-                    })()}
+                        <div className="grid grid-cols-3 gap-4">
+                          {card('Trigger', trig, pm?.trigger)}
+                          {card('Adsmax', amax, pm?.adsmax)}
+                          {card('Pixel', pix, pm?.pixel)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Metas */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                      {metaBar('Meta Core', 'Programática + Trigger + Adsmax', coreSum, metaCore, 'from-adsplay to-emerald-500')}
+                      {metaBar('Meta Pixel', 'Somente Pixel', pix, metaPix, 'from-purple-600 to-adsplay')}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {currentMedia.type === 'WEBSITE_EMBED' && currentMedia.payload && (
               <div className="w-full h-full bg-zinc-950 flex items-center justify-center p-12 relative overflow-hidden">
