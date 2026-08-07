@@ -1827,32 +1827,33 @@ export function Player() {
               const newBuTotal = trig + amax + pix;             // New BU (visual)
               const grand = prog + trig + amax + pix;
               const prevGrand = pm ? (Number(pm.adsplay) || 0) + (Number(pm.trigger) || 0) + (Number(pm.adsmax) || 0) + (Number(pm.pixel) || 0) : null;
-              const prevCore = pm ? (Number(pm.adsplay) || 0) + (Number(pm.trigger) || 0) + (Number(pm.adsmax) || 0) : null;
 
-              const card = (label: string, value: number, prevVal?: number | null) => (
-                <div className="bg-zinc-900/40 p-6 rounded-[2rem] border border-white/5 flex flex-col items-center gap-2 text-center backdrop-blur-xl">
-                  <p className="text-zinc-500 font-black uppercase tracking-widest text-sm">{label}</p>
-                  <div className="text-6xl font-black text-white tracking-tighter"><Counter value={value} /></div>
-                  <NSDelta prev={prevVal} cur={value} size="text-xs" />
-                  <p className="text-zinc-600 font-bold uppercase tracking-widest text-[10px]">Campanhas</p>
+              const card = (label: string, value: number, prevVal?: number | null, accent = 'text-white') => (
+                <div className="bg-zinc-900/40 rounded-[2rem] border border-white/5 flex flex-col items-center justify-center gap-3 text-center h-full py-8">
+                  <p className="text-zinc-400 font-black uppercase tracking-widest text-xl">{label}</p>
+                  <div className={`text-[7.5rem] leading-[0.85] font-black ${accent} tracking-tighter`}><Counter value={value} /></div>
+                  <div className="flex items-center gap-3">
+                    <NSDelta prev={prevVal} cur={value} size="text-base" />
+                    <span className="text-zinc-600 font-bold uppercase tracking-widest text-xs">Campanhas</span>
+                  </div>
                 </div>
               );
 
               const metaBar = (title: string, sub: string, value: number, goal: number, grad: string) => {
                 const pct = goal > 0 ? Math.round((value / goal) * 100) : 0;
                 return (
-                  <div className="space-y-4">
+                  <div className="flex flex-col justify-center gap-5 h-full">
                     <div className="flex justify-between items-end px-1">
                       <div>
-                        <p className="text-white font-black uppercase tracking-widest text-xl">{title}</p>
-                        <p className="text-zinc-600 font-bold uppercase tracking-widest text-[10px] mt-1">{sub}</p>
+                        <p className="text-white font-black uppercase tracking-widest text-3xl">{title}</p>
+                        <p className="text-zinc-500 font-bold uppercase tracking-widest text-sm mt-2">{sub}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-4xl font-black text-white leading-none"><Counter value={value} /> <span className="text-zinc-500 text-2xl">/ {goal}</span></p>
-                        <p className="text-zinc-500 font-black text-sm mt-1">{Math.min(100, pct)}% · faltam {Math.max(0, goal - value)}</p>
+                        <p className="text-6xl font-black text-white leading-none"><Counter value={value} /> <span className="text-zinc-500 text-4xl">/ {goal}</span></p>
+                        <p className="text-zinc-400 font-black text-xl mt-2">{Math.min(100, pct)}% · faltam {Math.max(0, goal - value)}</p>
                       </div>
                     </div>
-                    <div className="h-5 w-full bg-zinc-900 rounded-full p-1.5 border border-white/5 overflow-hidden">
+                    <div className="h-9 w-full bg-zinc-900 rounded-full p-2 border border-white/5 overflow-hidden">
                       <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, pct)}%` }} transition={{ duration: 2, ease: 'easeOut' }} className={`h-full bg-gradient-to-r ${grad} rounded-full`} />
                     </div>
                   </div>
@@ -1860,59 +1861,57 @@ export function Player() {
               };
 
               return (
-                <div className="w-full h-full bg-[#050505] flex items-center justify-center p-16 relative overflow-hidden">
+                <div className="w-full h-full bg-[#050505] flex flex-col p-14 gap-10 relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-[70vw] h-[70vw] bg-adsplay/10 blur-[140px] rounded-full -translate-y-1/2 translate-x-1/4" />
                   <div className="absolute bottom-0 left-0 w-[50vw] h-[50vw] bg-purple-500/10 blur-[120px] rounded-full translate-y-1/2 -translate-x-1/4" />
 
-                  <div className="w-full max-w-7xl space-y-10 relative z-10">
-                    {/* Header */}
-                    <div className="flex items-end justify-between gap-8">
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 bg-adsplay/20 rounded-2xl flex items-center justify-center text-adsplay"><TrendingUp size={26} /></div>
-                          <span className="text-lg font-black uppercase tracking-[0.4em] text-adsplay">North Star Metric</span>
-                        </div>
-                        <h2 className="text-7xl font-black text-white tracking-tighter leading-none">Meta de {p.currentYear || new Date().getFullYear()}<span className="text-adsplay">.</span></h2>
+                  {/* Header */}
+                  <div className="flex items-end justify-between gap-8 relative z-10 shrink-0">
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 bg-adsplay/20 rounded-2xl flex items-center justify-center text-adsplay"><TrendingUp size={36} /></div>
+                        <span className="text-2xl font-black uppercase tracking-[0.4em] text-adsplay">North Star Metric</span>
                       </div>
-                      <div className="text-right">
-                        <p className="text-zinc-500 font-black uppercase tracking-[0.3em] text-xs">Total Geral</p>
-                        <div className="text-7xl font-black text-white leading-none tracking-tighter"><Counter value={grand} /></div>
-                        {prevGrand != null && (
-                          <div className="flex items-center justify-end gap-2 mt-2">
-                            <NSDelta prev={prevGrand} cur={grand} size="text-base" />
-                            <span className="text-zinc-600 font-bold uppercase tracking-[0.15em] text-[9px]">vs. última</span>
-                          </div>
-                        )}
-                      </div>
+                      <h2 className="text-8xl font-black text-white tracking-tighter leading-none">Meta de {p.currentYear || new Date().getFullYear()}<span className="text-adsplay">.</span></h2>
                     </div>
+                    <div className="text-right">
+                      <p className="text-zinc-500 font-black uppercase tracking-[0.3em] text-lg">Total Geral</p>
+                      <div className="text-[9rem] font-black text-white leading-[0.8] tracking-tighter"><Counter value={grand} /></div>
+                      {prevGrand != null && (
+                        <div className="flex items-center justify-end gap-3 mt-3">
+                          <NSDelta prev={prevGrand} cur={grand} size="text-xl" />
+                          <span className="text-zinc-600 font-bold uppercase tracking-[0.15em] text-xs">vs. última</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-                    {/* BUs */}
-                    <div className="grid grid-cols-1 lg:grid-cols-[1fr_3fr] gap-6">
-                      <div className="bg-white/[0.02] rounded-[2.5rem] border border-adsplay/20 p-5 space-y-4">
-                        <div className="flex items-baseline justify-between px-1">
-                          <span className="text-adsplay font-black uppercase tracking-[0.3em] text-lg">Core</span>
-                          <span className="text-zinc-500 font-bold text-xs uppercase tracking-widest">Total <span className="text-white font-black text-lg">{prog}</span></span>
-                        </div>
-                        {card('Programática', prog, pm?.adsplay)}
+                  {/* BUs — grow to fill vertical space */}
+                  <div className="grid grid-cols-1 lg:grid-cols-[1fr_3fr] gap-8 relative z-10 flex-1 min-h-0">
+                    <div className="bg-white/[0.02] rounded-[2.5rem] border border-adsplay/20 p-7 flex flex-col gap-5">
+                      <div className="flex items-baseline justify-between px-1 shrink-0">
+                        <span className="text-adsplay font-black uppercase tracking-[0.3em] text-2xl">Core</span>
+                        <span className="text-zinc-500 font-bold text-sm uppercase tracking-widest">Total <span className="text-white font-black text-2xl">{prog}</span></span>
                       </div>
-                      <div className="bg-white/[0.02] rounded-[2.5rem] border border-purple-500/20 p-5 space-y-4">
-                        <div className="flex items-baseline justify-between px-1">
-                          <span className="text-purple-400 font-black uppercase tracking-[0.3em] text-lg">New</span>
-                          <span className="text-zinc-500 font-bold text-xs uppercase tracking-widest">Total <span className="text-white font-black text-lg">{newBuTotal}</span></span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-4">
-                          {card('Trigger', trig, pm?.trigger)}
-                          {card('Adsmax', amax, pm?.adsmax)}
-                          {card('Pixel', pix, pm?.pixel)}
-                        </div>
+                      <div className="flex-1 min-h-0">{card('Programática', prog, pm?.adsplay, 'text-adsplay')}</div>
+                    </div>
+                    <div className="bg-white/[0.02] rounded-[2.5rem] border border-purple-500/20 p-7 flex flex-col gap-5">
+                      <div className="flex items-baseline justify-between px-1 shrink-0">
+                        <span className="text-purple-400 font-black uppercase tracking-[0.3em] text-2xl">New</span>
+                        <span className="text-zinc-500 font-bold text-sm uppercase tracking-widest">Total <span className="text-white font-black text-2xl">{newBuTotal}</span></span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-6 flex-1 min-h-0">
+                        {card('Trigger', trig, pm?.trigger)}
+                        {card('Adsmax', amax, pm?.adsmax)}
+                        {card('Pixel', pix, pm?.pixel, 'text-purple-400')}
                       </div>
                     </div>
+                  </div>
 
-                    {/* Metas */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                      {metaBar('Meta Core', 'Programática + Trigger + Adsmax', coreSum, metaCore, 'from-adsplay to-emerald-500')}
-                      {metaBar('Meta Pixel', 'Somente Pixel', pix, metaPix, 'from-purple-600 to-adsplay')}
-                    </div>
+                  {/* Metas */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 relative z-10 shrink-0">
+                    {metaBar('Meta Core', 'Programática + Trigger + Adsmax', coreSum, metaCore, 'from-adsplay to-emerald-500')}
+                    {metaBar('Meta Pixel', 'Somente Pixel', pix, metaPix, 'from-purple-600 to-adsplay')}
                   </div>
                 </div>
               );
