@@ -46,6 +46,7 @@ import {
 } from 'lucide-react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { CardBoundary, CardPlaceholder } from '../components/CardBoundary';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { GoogleGenAI } from "@google/genai";
 import { deriveBrazil, deriveToday, deriveBracket, wcResultLetter, flagUrl, fetchWcPendingUpdates, matchupKey, knockoutOrder, isLiveByClock, brasiliaTodayISO, fmtBrDate, WC_LIVE_REFRESH_MS, WCMatch } from '../lib/worldcup';
@@ -69,6 +70,52 @@ interface Media {
   type: 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'NORTH_STAR' | 'WEATHER' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES' | 'WC_BRAZIL' | 'WC_TODAY' | 'WC_BRACKET' | 'WC_RANKING';
   payload: any;
 }
+
+// ---------------------------------------------------------------------------
+// Card rotation tuning
+// ---------------------------------------------------------------------------
+
+// Crossfade length. The outgoing card stays fully opaque underneath while the
+// incoming one fades in on top, so the screen never dips toward black.
+const CARD_FADE_MS = 600;
+
+// How long a rotation may be held back waiting for the next card's images to
+// decode. Under this cap the CURRENT card stays on screen (never black); past
+// it we swap anyway so a slow asset can't stall the playlist.
+const ASSET_GATE_MS = 1200;
+
+// Types this bundle knows how to draw. A media doc whose type is missing here
+// (e.g. a card created in the admin while this TV still runs an older bundle)
+// renders a placeholder instead of an empty black screen.
+const KNOWN_MEDIA_TYPES = new Set([
+  'IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'CAROUSEL',
+  'NEWS_CLIPPING', 'WEBSITE_EMBED', 'WEATHER', 'MONTHLY_GOAL', 'NORTH_STAR',
+  'FINAL_SPRINT', 'SMART_SALES', 'WC_BRAZIL', 'WC_TODAY', 'WC_BRACKET', 'WC_RANKING',
+]);
+
+// Types whose render dereferences payload fields directly — without a payload
+// they would either throw or paint nothing at all.
+const PAYLOAD_REQUIRED_TYPES = new Set([
+  'IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'CAROUSEL',
+  'WEBSITE_EMBED', 'WEATHER',
+]);
+
+const canRenderMedia = (m: Media | null) => {
+  if (!m || !KNOWN_MEDIA_TYPES.has(m.type)) return false;
+  if (PAYLOAD_REQUIRED_TYPES.has(m.type) && !m.payload) return false;
+  return true;
+};
+
+// Images worth decoding before a card goes on screen.
+const heroAssetsOf = (m: Media | null): string[] => {
+  if (!m?.payload) return [];
+  const p = m.payload;
+  if (m.type === 'IMAGE_HERO') return p.url ? [p.url] : [];
+  if (m.type === 'WEBSITE_EMBED') return p.screenshotUrl ? [p.screenshotUrl] : [];
+  if (m.type === 'CAROUSEL') return (p.images || []).slice(0, 2).map((i: any) => i?.url).filter(Boolean);
+  if (m.type === 'NEWS_CLIPPING') return (p.images || []).slice(0, 2).map((i: any) => i?.url).filter(Boolean);
+  return [];
+};
 
 interface Sale {
   id: string;
@@ -1081,8 +1128,16 @@ export function Player() {
     setCurrentIndex((prev) => (prev + 1) % playlist.items.length);
   }, [playlist]);
 
-  // 6. Media Resolver (Real-time media fetch)
-  const [currentMedia, setCurrentMedia] = useState<Media | null>(null);
+  // 6. Media Resolver — atomic card swap over a warm media cache.
+  //
+  // The card on screen is a "slot": index + media travel together, so the
+  // AnimatePresence key changes exactly ONCE per rotation. Previously the key
+  // came from currentIndex while the media doc arrived a moment later, so every
+  // transition remounted the outgoing card first and then mounted the incoming
+  // one — two (sometimes three) full-screen trees alive at once, which is what
+  // made Tizen drop frames and flash black.
+  const [slot, setSlot] = useState<{ index: number; media: Media; seq: number } | null>(null);
+  const currentMedia: Media | null = slot?.media ?? null;
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [sales, setSales] = useState<Sale[]>([]);
   const [newSaleId, setNewSaleId] = useState<string | null>(null);
@@ -1242,58 +1297,135 @@ export function Player() {
       setCarouselIndex(0);
     }
   }, [currentMedia?.id, newsItems.length]);
+  // 6.1 Warm media cache — subscribe to every media doc in the playlist ONCE
+  // and keep the listeners alive. Rotation then reads from memory with zero
+  // network wait (the same trick that fixed the WC cards' cold start), and
+  // admin edits still stream in live.
+  const [mediaCache, setMediaCache] = useState<Record<string, Media | null>>({});
+  const mediaSubsRef = useRef<Record<string, () => void>>({});
+
+  useEffect(() => {
+    if (!playlist) return;
+    const ids: string[] = [];
+    for (const it of playlist.items) {
+      if (ids.indexOf(it.media_id) === -1) ids.push(it.media_id);
+    }
+
+    for (const id of ids) {
+      if (mediaSubsRef.current[id]) continue; // already warm
+      mediaSubsRef.current[id] = onSnapshot(doc(db, 'media', id), (docSnap) => {
+        const next = docSnap.exists() ? (Object.assign({ id: docSnap.id }, docSnap.data()) as Media) : null;
+        setMediaCache(prev => Object.assign({}, prev, { [id]: next }));
+      }, (err) => {
+        handleFirestoreError(err, OperationType.GET, `media/${id}`);
+      });
+    }
+
+    // Drop listeners for media no longer in the playlist.
+    for (const id of Object.keys(mediaSubsRef.current)) {
+      if (ids.indexOf(id) === -1) {
+        mediaSubsRef.current[id]();
+        delete mediaSubsRef.current[id];
+      }
+    }
+  }, [playlist]);
+
+  useEffect(() => () => {
+    const subs = mediaSubsRef.current;
+    for (const id of Object.keys(subs)) subs[id]();
+    mediaSubsRef.current = {};
+  }, []);
+
+  // 6.2 Asset warm-up — decode the next card's images ahead of the swap and
+  // remember which URLs are ready, so the commit below can wait on them.
+  // Two sets on purpose: "started" dedupes the downloads, "ready" records what
+  // actually finished decoding. Collapsing them into one would make the gate
+  // below think an in-flight image was already painted.
+  const assetsStartedRef = useRef<Set<string>>(new Set());
+  const assetsReadyRef = useRef<Set<string>>(new Set());
+  const [assetTick, setAssetTick] = useState(0);
+
+  const warmAssets = React.useCallback((urls: string[]) => {
+    for (const url of urls) {
+      if (assetsStartedRef.current.has(url)) continue;
+      assetsStartedRef.current.add(url);
+      const img = new Image();
+      const done = () => {
+        assetsReadyRef.current.add(url);
+        setAssetTick(v => v + 1);
+      };
+      img.onload = done;
+      img.onerror = done; // a broken image must never stall the playlist
+      img.src = url;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!playlist || playlist.items.length <= 1) return;
+    const nextIndex = (currentIndex + 1) % playlist.items.length;
+    const next = mediaCache[playlist.items[nextIndex].media_id];
+    if (next) warmAssets(heroAssetsOf(next));
+  }, [playlist, currentIndex, mediaCache, warmAssets]);
+
+  // 6.3 Commit — promote currentIndex into the visible slot, but only once the
+  // card can actually paint. While we wait the CURRENT card stays on screen, so
+  // a slow doc or a slow image shows the previous card instead of black.
+  const gateRef = useRef<{ key: string; startedAt: number } | null>(null);
+  const skipsRef = useRef(0);
+
   useEffect(() => {
     if (!playlist || playlist.items.length === 0) return;
-    const mediaId = playlist.items[currentIndex].media_id;
-    
-    const unsubscribe = onSnapshot(doc(db, 'media', mediaId), (docSnap) => {
-      if (docSnap.exists()) {
-        setCurrentMedia(Object.assign({ id: docSnap.id }, docSnap.data()) as Media);
-      } else {
-        setCurrentMedia(null);
+    const item = playlist.items[currentIndex];
+    if (!item) return;
+
+    const target = mediaCache[item.media_id];
+    if (target === undefined) return; // doc not in yet — hold the current card
+
+    // Media referenced by the playlist but deleted: skip ahead rather than
+    // burning this slot's duration on a blank screen. Bounded by one lap around
+    // the playlist so an all-deleted playlist can't spin in a render loop.
+    if (target === null) {
+      if (playlist.items.length > 1 && skipsRef.current < playlist.items.length) {
+        skipsRef.current += 1;
+        handleNext();
       }
-    }, (err) => {
-      handleFirestoreError(err, OperationType.GET, `media/${mediaId}`);
-    });
+      return;
+    }
+    skipsRef.current = 0;
 
-    return () => unsubscribe();
-  }, [playlist, currentIndex]);
+    const key = `${currentIndex}-${target.id}`;
 
-  // 6.1 Preload Next Media (Performance Optimization)
-  useEffect(() => {
-    if (!playlist || playlist.items.length <= 1 || status !== 'PLAYING') return;
-    
-    const nextIndex = (currentIndex + 1) % playlist.items.length;
-    const nextMediaId = playlist.items[nextIndex].media_id;
-    
-    // Fetch next media doc to trigger image preloading
-    const unsubscribe = onSnapshot(doc(db, 'media', nextMediaId), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        // Preload images if applicable
-        if (data.type === 'IMAGE_HERO' && data.payload?.url) {
-          const img = new Image();
-          img.src = data.payload.url;
-        } else if (data.type === 'CAROUSEL' && data.payload?.images) {
-          data.payload.images.slice(0, 3).forEach((imgObj: any) => {
-            if (imgObj.url) {
-              const img = new Image();
-              img.src = imgObj.url;
-            }
-          });
-        } else if (data.type === 'NEWS_CLIPPING' && data.payload?.images) {
-          data.payload.images.slice(0, 2).forEach((imgObj: any) => {
-            if (imgObj.url) {
-              const img = new Image();
-              img.src = imgObj.url;
-            }
-          });
-        }
-      }
-    });
+    // Same slot: adopt payload edits in place. The key is unchanged, so this
+    // re-renders without remounting (and without a crossfade).
+    if (slot && slot.index === currentIndex && slot.media.id === target.id) {
+      if (slot.media !== target) setSlot({ index: currentIndex, media: target, seq: slot.seq });
+      return;
+    }
 
-    return () => unsubscribe();
-  }, [playlist, currentIndex, status]);
+    const commit = () => {
+      gateRef.current = null;
+      setSlot(prev => ({ index: currentIndex, media: target, seq: (prev?.seq ?? 0) + 1 }));
+    };
+
+    // Nothing to wait on for cards that draw straight from their payload.
+    const pending = heroAssetsOf(target).filter(u => !assetsReadyRef.current.has(u));
+    if (pending.length === 0) {
+      commit();
+      return;
+    }
+
+    warmAssets(pending);
+    if (!gateRef.current || gateRef.current.key !== key) {
+      gateRef.current = { key, startedAt: Date.now() };
+    }
+    if (Date.now() - gateRef.current.startedAt >= ASSET_GATE_MS) {
+      commit(); // cap reached — swap anyway
+      return;
+    }
+
+    const retry = setTimeout(() => setAssetTick(v => v + 1), 120);
+    return () => clearTimeout(retry);
+  }, [playlist, currentIndex, mediaCache, slot, assetTick, warmAssets, handleNext]);
 
   const getWeatherIcon = (condition: string) => {
     const c = condition?.toLowerCase() || '';
@@ -1399,9 +1531,12 @@ export function Player() {
         </div>
       </div>
 
+      {/* Cards live in their own stacking context so the per-transition
+          z-index (below) can never climb over the top bar / progress bar. */}
+      <div className="absolute inset-0" style={{ isolation: 'isolate' }}>
       <AnimatePresence>
         {!currentMedia ? (
-          <motion.div 
+          <motion.div
             key="idle"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1423,15 +1558,28 @@ export function Player() {
             </div>
           </motion.div>
         ) : (
-          <motion.div 
-            key={`${currentIndex}-${currentMedia.id}`}
+          <motion.div
+            key={`${slot!.index}-${currentMedia.id}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 1.0, ease: "easeInOut" }}
+            // The outgoing card holds FULL opacity for the whole crossfade while
+            // the incoming one fades in on top of it, then drops out once it is
+            // completely covered. Fading both at once (the old behaviour)
+            // composited ~75% luminance mid-transition — a visible dip toward
+            // black on the TVs.
+            exit={{ opacity: 0, transition: { duration: 0.2, delay: CARD_FADE_MS / 1000 } }}
+            transition={{ duration: CARD_FADE_MS / 1000, ease: 'easeInOut' }}
             className="absolute inset-0 overflow-hidden"
-            style={{ willChange: 'opacity' }}
+            style={{ willChange: 'opacity', zIndex: slot!.seq }}
           >
+            <CardBoundary mediaId={currentMedia.id} title={currentMedia.title}>
+            {!canRenderMedia(currentMedia) ? (
+              <CardPlaceholder
+                label={currentMedia.title || 'Conteúdo indisponível'}
+                detail={KNOWN_MEDIA_TYPES.has(currentMedia.type) ? 'Sem conteúdo configurado' : 'Player desatualizado'}
+              />
+            ) : (
+              <>
             {currentMedia.type === 'IMAGE_HERO' && <MediaImageHero payload={currentMedia.payload} />}
 
             {currentMedia.type === 'VIDEO_FILE' && <MediaVideoFile payload={currentMedia.payload} />}
@@ -1916,54 +2064,6 @@ export function Player() {
                 </div>
               );
             })()}
-
-            {currentMedia.type === 'WEBSITE_EMBED' && currentMedia.payload && (
-              <div className="w-full h-full bg-zinc-950 flex items-center justify-center p-12 relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-adsplay/10 via-transparent to-purple-500/10" />
-                
-                <div className="w-full max-w-7xl space-y-8 relative z-10">
-                  <div className="flex justify-between items-end border-b border-white/10 pb-6">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-adsplay/10 rounded-xl flex items-center justify-center text-adsplay">
-                          <Globe size={20} />
-                        </div>
-                        <span className="text-[10px] font-black uppercase tracking-[0.4em] text-adsplay">Website Preview</span>
-                      </div>
-                      <h2 className="text-4xl font-black text-white tracking-tighter leading-none">
-                        {currentMedia.title}<span className="text-adsplay">.</span>
-                      </h2>
-                    </div>
-                    <div className="flex flex-col items-end gap-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-adsplay animate-pulse" />
-                        <p className="text-zinc-500 text-[9px] font-black uppercase tracking-[0.2em]">
-                          Live Snapshot — {currentMedia.payload.url}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="relative aspect-video rounded-[2.5rem] overflow-hidden border-8 border-white/5 shadow-[0_40px_80px_-15px_rgba(0,0,0,0.8)] bg-zinc-900">
-                    {currentMedia.payload.screenshotUrl ? (
-                      <img 
-                        src={currentMedia.payload.screenshotUrl} 
-                        alt={currentMedia.title}
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-zinc-800">
-                        <Globe size={120} />
-                      </div>
-                    )}
-                    
-                    {/* Overlay for "Print" look */}
-                    <div className="absolute inset-0 pointer-events-none border-[20px] border-white/5 rounded-[2rem]" />
-                  </div>
-                </div>
-              </div>
-            )}
 
             {currentMedia.type === 'WEATHER' && currentMedia.payload && (
               <div className={`w-full h-full flex items-center justify-center p-24 relative overflow-hidden transition-all duration-1000 ${
@@ -2747,13 +2847,9 @@ export function Player() {
               );
             })()}
 
-            {/* Unknown Media Type Fallback */}
-            {!['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'CAROUSEL', 'NEWS_CLIPPING', 'MONTHLY_GOAL', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT', 'SMART_SALES', 'WC_BRAZIL', 'WC_TODAY', 'WC_BRACKET', 'WC_RANKING'].includes(currentMedia.type) && (
-              <div className="w-full h-full flex flex-col items-center justify-center text-white bg-zinc-900">
-                <p className="text-2xl font-bold">Tipo de mídia desconhecido</p>
-                <p className="text-zinc-500">{currentMedia.type}</p>
-              </div>
+              </>
             )}
+            </CardBoundary>
 
             {/* Overlay Info (Legacy - Hidden by Top Bar but kept for safety if needed) */}
             <div className="absolute top-10 right-10 flex items-center gap-4 opacity-0 pointer-events-none">
@@ -2770,6 +2866,7 @@ export function Player() {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
 
       {/* Progress Bar - Moved outside AnimatePresence for smoother transitions */}
       {playlist && playlist.items[currentIndex] && status === 'PLAYING' && (
