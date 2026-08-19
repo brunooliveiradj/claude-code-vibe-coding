@@ -1989,21 +1989,64 @@ export function Player() {
 
               const metaBar = (title: string, sub: string, value: number, goal: number, grad: string) => {
                 const pct = goal > 0 ? Math.round((value / goal) * 100) : 0;
+                const over = pct > 100;
+                const surplus = Math.max(0, value - goal);
+
+                // Past the goal the bar rescales instead of sitting pinned at
+                // 100%: the fill runs the whole track and the goal line moves
+                // INSIDE it, so the stretch beyond the mark is the overshoot.
+                const barMax = Math.max(100, pct);
+                const fillPct = (pct / barMax) * 100;
+                const goalMarkPct = (100 / barMax) * 100;
+
                 return (
                   <div className="flex flex-col justify-center gap-5 h-full">
-                    <div className="flex justify-between items-end px-1">
-                      <div>
-                        <p className="text-white font-black uppercase tracking-widest text-3xl">{title}</p>
+                    <div className="flex justify-between items-end px-1 gap-6">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-4 flex-wrap">
+                          <p className="text-white font-black uppercase tracking-widest text-3xl">{title}</p>
+                          {over && (
+                            <span className="px-4 py-1.5 rounded-full bg-amber-400 text-black font-black uppercase tracking-widest text-base flex items-center gap-2 shadow-[0_0_30px_-5px_rgba(251,191,36,0.7)]">
+                              <Trophy size={18} /> +{pct - 100}% acima da meta
+                            </span>
+                          )}
+                        </div>
                         <p className="text-zinc-500 font-bold uppercase tracking-widest text-sm mt-2">{sub}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-6xl font-black text-white leading-none"><Counter value={value} /> <span className="text-zinc-500 text-4xl">/ {goal}</span></p>
-                        <p className="text-zinc-400 font-black text-xl mt-2">{Math.min(100, pct)}% · faltam {Math.max(0, goal - value)}</p>
+                      <div className="text-right shrink-0">
+                        <p className={`text-7xl font-black leading-none tracking-tighter ${over ? 'text-amber-300' : 'text-white'}`}>
+                          <Counter value={pct} />%
+                        </p>
+                        <p className="text-zinc-400 font-black text-xl mt-2">
+                          {value} / {goal} · {over ? `+${surplus} campanhas` : `faltam ${goal - value}`}
+                        </p>
                       </div>
                     </div>
-                    <div className="h-9 w-full bg-zinc-900 rounded-full p-2 border border-white/5 overflow-hidden">
-                      <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, pct)}%` }} transition={{ duration: 2, ease: 'easeOut' }} className={`h-full bg-gradient-to-r ${grad} rounded-full`} />
+
+                    <div className={`h-9 w-full bg-zinc-900 rounded-full p-2 border ${over ? 'border-amber-400/40' : 'border-white/5'}`}>
+                      <div className="relative h-full w-full rounded-full overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${fillPct}%` }}
+                          transition={{ duration: 2, ease: 'easeOut' }}
+                          className={`absolute inset-y-0 left-0 bg-gradient-to-r rounded-full ${over ? 'from-adsplay via-emerald-400 to-amber-300' : grad}`}
+                        />
+                        {over && (
+                          <div className="absolute inset-y-0 w-[3px] bg-black/70" style={{ left: `${goalMarkPct}%` }} />
+                        )}
+                      </div>
                     </div>
+
+                    {over && (
+                      <div className="relative h-4 -mt-2">
+                        <span
+                          className="absolute -translate-x-1/2 text-xs font-black uppercase tracking-widest text-zinc-500 whitespace-nowrap"
+                          style={{ left: `${goalMarkPct}%` }}
+                        >
+                          meta {goal}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 );
               };
