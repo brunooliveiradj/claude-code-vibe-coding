@@ -44,7 +44,7 @@ import {
   Globe,
   Trophy
 } from 'lucide-react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { CardBoundary, CardPlaceholder } from '../components/CardBoundary';
 import { db, handleFirestoreError, OperationType } from '../firebase';
@@ -627,6 +627,12 @@ export function Player() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const urlDeviceId = searchParams.get('id');
+
+  // Playlist URL (/p/:playlistId): pin this player to one playlist and loop it
+  // forever, ignoring the schedule. Used to embed a single playlist somewhere
+  // else without disturbing the TVs' regular programming.
+  const { playlistId: pinnedPlaylistId } = useParams();
+  const [pinnedMissing, setPinnedMissing] = useState(false);
   
   // No pairing: the player always plays the current playlist. An explicit
   // ?id=<deviceId> is optional and used only for monitoring (name + last_ping).
@@ -1042,21 +1048,22 @@ export function Player() {
     };
   }, [deviceId, isOnline]);
 
-  // 3. Fetch the current playlist — always. Priority: playlist scheduled for
-  // today; fallback: the most recently created playlist so the TV never sits
-  // idle when content exists.
+  // 3. Fetch the current playlist. A pinned playlist (/p/:playlistId) wins over
+  // everything; otherwise: playlist scheduled for today, falling back to the
+  // most recently created one so the TV never sits idle when content exists.
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
     let playlistUnsub: (() => void) | null = null;
     let lastPlaylistId: string | null = null;
 
-    const subscribeToPlaylist = (playlistId: string) => {
+    const subscribeToPlaylist = (playlistId: string, pinned = false) => {
       if (playlistUnsub) {
         playlistUnsub();
         playlistUnsub = null;
       }
       playlistUnsub = onSnapshot(doc(db, 'playlists', playlistId), (plSnap) => {
         if (plSnap.exists()) {
+          if (pinned) setPinnedMissing(false);
           const newPlaylist = Object.assign({ id: plSnap.id }, plSnap.data()) as Playlist;
           const isNewPlaylist = lastPlaylistId !== newPlaylist.id;
           lastPlaylistId = newPlaylist.id;
@@ -1069,6 +1076,7 @@ export function Player() {
           setPlaylist(newPlaylist);
           setStatus('PLAYING');
         } else {
+          if (pinned) setPinnedMissing(true);
           lastPlaylistId = null;
           setPlaylist(null);
           setStatus('IDLE');
@@ -1105,6 +1113,16 @@ export function Player() {
       clearPlaylist();
     };
 
+    // Pinned playlist: no schedule listener, no fallback. If the id is wrong we
+    // say so instead of silently playing something else.
+    if (pinnedPlaylistId) {
+      setPinnedMissing(false);
+      subscribeToPlaylist(pinnedPlaylistId, true);
+      return () => {
+        if (playlistUnsub) playlistUnsub();
+      };
+    }
+
     const scheduleUnsub = onSnapshot(doc(db, 'schedule', today), (docSnap) => {
       const playlistId = docSnap.exists() ? docSnap.data().playlistId : null;
       if (playlistId) {
@@ -1120,7 +1138,7 @@ export function Player() {
       scheduleUnsub();
       if (playlistUnsub) playlistUnsub();
     };
-  }, []);
+  }, [pinnedPlaylistId]);
 
   // 5. Playback Loop
   const handleNext = React.useCallback(() => {
@@ -1453,7 +1471,9 @@ export function Player() {
     <div className="fixed inset-0 bg-black overflow-hidden cursor-none group">
       {/* Fullscreen Overlay (Non-blocking and auto-hiding) */}
       <AnimatePresence>
-        {showFullscreenPrompt && !isFullscreen && !user && !promptDismissed && (
+        {/* Never nag on a playlist URL — it is usually embedded, where going
+            fullscreen makes no sense. */}
+        {showFullscreenPrompt && !isFullscreen && !user && !promptDismissed && !pinnedPlaylistId && (
           <motion.div 
             initial={{ y: -100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -1549,8 +1569,14 @@ export function Player() {
               <Tv size={80} className="text-zinc-800 relative" />
             </div>
             <div className="text-center space-y-2">
-              <h2 className="text-2xl font-bold text-zinc-500">Nenhuma programação ativa</h2>
-              <p className="text-zinc-700 font-medium">Aguardando playlist agendada para hoje...</p>
+              <h2 className="text-2xl font-bold text-zinc-500">
+                {pinnedMissing ? 'Playlist não encontrada' : 'Nenhuma programação ativa'}
+              </h2>
+              <p className="text-zinc-700 font-medium">
+                {pinnedMissing
+                  ? 'Confira o link — esta playlist pode ter sido removida.'
+                  : 'Aguardando playlist agendada para hoje...'}
+              </p>
             </div>
             <div className="flex items-center gap-3 px-4 py-2 bg-zinc-900 rounded-full border border-zinc-800">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />

@@ -15,7 +15,10 @@ import {
   X,
   Instagram,
   Layers,
-  BarChart3
+  BarChart3,
+  Link2,
+  Check,
+  ExternalLink
 } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
@@ -52,6 +55,23 @@ export function Playlists() {
   const [loading, setLoading] = useState(false);
   const [filterCompany, setFilterCompany] = useState<Company | 'Todos'>('Todos');
   const [mediaFilterCompany, setMediaFilterCompany] = useState<Company | 'Todos'>('Todos');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Playlist URL: plays this playlist on loop, independent of the schedule.
+  const playlistUrl = (id: string) => `${window.location.origin}/p/${id}`;
+
+  const copyPlaylistUrl = async (id: string) => {
+    const url = playlistUrl(id);
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // clipboard blocked (http, older webview): fall back to a manual prompt
+      window.prompt('Copie a URL da playlist:', url);
+      return;
+    }
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(prev => (prev === id ? null : prev)), 2000);
+  };
 
   const fetchData = async () => {
     try {
@@ -272,7 +292,40 @@ export function Playlists() {
               )}
             </div>
 
-            <button 
+            {/* Playlist URL — plays only this playlist, on loop, ignoring the
+                schedule. Handy for embedding a single playlist elsewhere. */}
+            <div className="space-y-2 pt-1 border-t border-zinc-100">
+              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                <Link2 size={12} /> URL da playlist
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 min-w-0 truncate bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2 text-[11px] font-mono text-zinc-500">
+                  /p/{pl.id}
+                </code>
+                <button
+                  onClick={() => copyPlaylistUrl(pl.id)}
+                  title="Copiar URL"
+                  className={`p-2 rounded-lg border transition-all ${
+                    copiedId === pl.id
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
+                      : 'bg-white border-zinc-200 text-zinc-400 hover:text-zinc-900 hover:bg-zinc-50'
+                  }`}
+                >
+                  {copiedId === pl.id ? <Check size={16} /> : <Link2 size={16} />}
+                </button>
+                <a
+                  href={playlistUrl(pl.id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Abrir em nova aba"
+                  className="p-2 rounded-lg border border-zinc-200 bg-white text-zinc-400 hover:text-zinc-900 hover:bg-zinc-50 transition-all"
+                >
+                  <ExternalLink size={16} />
+                </a>
+              </div>
+            </div>
+
+            <button
               onClick={() => handleEdit(pl)}
               className="w-full py-3 bg-zinc-50 text-zinc-900 rounded-xl font-bold text-sm hover:bg-zinc-100 transition-colors flex items-center justify-center gap-2"
             >

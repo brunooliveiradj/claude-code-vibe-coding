@@ -33,6 +33,12 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Player />} />
               <Route path="/player" element={<Navigate to="/" replace />} />
+
+              {/* Playlist URL: plays one specific playlist on loop, ignoring the
+                  schedule. Both paths are accepted so a link never dead-ends. */}
+              <Route path="/p/:playlistId" element={<Player />} />
+              <Route path="/player/:playlistId" element={<Player />} />
+
               <Route path="/player/*" element={<Navigate to="/" replace />} />
 
               <Route path="/admin/*" element={
