@@ -5,6 +5,7 @@ import {
   Pencil, Sparkles, Copy, Check
 } from "lucide-react";
 import { CampaignGoal, MediaStrategy, CampaignState, WizardMessage } from "./types";
+import * as API from "./api";
 import { BudgetSimulator } from "./components/BudgetSimulator";
 import { InteractiveMap } from "./components/InteractiveMap";
 import { CreativeUploader } from "./components/CreativeUploader";
@@ -219,11 +220,42 @@ export default function App() {
   const [wlInput, setWlInput]             = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // ── API-loaded data (fallback to mock when API not configured) ────────────
+  const [apiAdvertisers, setApiAdvertisers] = useState<API.Advertiser[]>([]);
+  const [apiStates, setApiStates]           = useState<API.GeoState[]>([]);
+  const [apiBroad, setApiBroad]             = useState<API.Audience[]>([]);
+  const [apiSegmented, setApiSegmented]     = useState<API.Audience[]>([]);
+  const [apiCreatives, setApiCreatives]     = useState<API.Creative[]>([]);
+  const [apiPixels, setApiPixels]           = useState<API.Pixel[]>([]);
+
+  useEffect(() => {
+    if (!API.isConfigured) return;
+    API.fetchAdvertisers().then(setApiAdvertisers).catch(console.error);
+    API.fetchStates().then(setApiStates).catch(console.error);
+    API.fetchBroadAudiences().then(setApiBroad).catch(console.error);
+    API.fetchSegmentedAudiences().then(setApiSegmented).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    if (!API.isConfigured || !form.advertiserId) return;
+    API.fetchCreatives(form.advertiserId).then(setApiCreatives).catch(console.error);
+    API.fetchPixels(form.advertiserId).then(data => {
+      setApiPixels(data);
+      setPixels(data.map(p => ({ ...p, installations: 0 })));
+    }).catch(console.error);
+  }, [form.advertiserId]);
+
+  const advertiserList = apiAdvertisers.length > 0 ? apiAdvertisers : MOCK_ADVERTISERS;
+  const stateList      = apiStates.length > 0 ? apiStates : STATE_DATA;
+  const broadList      = apiBroad.length > 0 ? apiBroad : MOCK_BROAD;
+  const segmentedList  = apiSegmented.length > 0 ? apiSegmented : MOCK_SEGMENTED;
+  const creativeList   = apiCreatives.length > 0 ? apiCreatives : MOCK_CREATIVES;
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs, aiLoading]);
 
-  const stateLabel = (id: string) => STATE_DATA.find(s => s.id === id)?.label ?? id;
+  const stateLabel = (id: string) => stateList.find(s => s.id === id)?.label ?? id;
   const pixelName  = (id: string) => pixels.find(p => p.id === id)?.name ?? "—";
 
   const calcDays = (start: string, end: string): number => {
@@ -302,16 +334,28 @@ export default function App() {
     });
   };
 
-  const handleLaunch = () => {
+  const handleLaunch = async () => {
+    const payload = buildPayload(form);
+    let campId = `camp-${Date.now()}`;
+    if (API.isConfigured) {
+      try {
+        const res = await API.saveCampaign(payload);
+        campId = res.id;
+      } catch (e) {
+        console.error("Erro ao salvar campanha:", e);
+        setAdminAlert("Erro ao salvar campanha na API. Verifique o console.");
+        return;
+      }
+    }
     const camp = {
-      id: `camp-${Date.now()}`,
+      id: campId,
       name: form.campaignName || "Nova Campanha IA",
       advertiser: form.advertiserName,
       objective: form.objective || "Awareness",
       budget: Number(form.budget) || 1000,
       startDate: form.startDate || "—",
       endDate: form.endDate || "—",
-      status: "Ativo",
+      status: form.isDraft ? "Rascunho" : "Ativo",
       invested: 0, clicks: 0, conversions: 0,
       strategy: form.strategy || "Display",
     };
@@ -399,10 +443,10 @@ export default function App() {
             <div className="a-field">
               <label>Anunciante</label>
               <select value={form.advertiserId} onChange={e => {
-                const adv = MOCK_ADVERTISERS.find(a => a.id === e.target.value);
+                const adv = advertiserList.find(a => a.id === e.target.value);
                 if (adv) set({ advertiserId: adv.id, advertiserName: adv.name });
               }}>
-                {MOCK_ADVERTISERS.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                {advertiserList.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
             <div className="a-field">
@@ -505,7 +549,7 @@ export default function App() {
             </div>
             {form.geoMode === "region" ? (
               <div className="a-chip-list">
-                {STATE_DATA.map(st => (
+                {stateList.map(st => (
                   <button key={st.id} type="button" onClick={() => toggle("targetStateIds", st.id)}
                     className={`a-chip ${form.targetStateIds.includes(st.id) ? "sel" : ""}`}>
                     {form.targetStateIds.includes(st.id) ? "✓ " : ""}{st.label}
@@ -582,7 +626,7 @@ export default function App() {
             <div>
               <p className="text-xs font-bold text-zinc-500 uppercase mb-2">Audiências Amplas (Google)</p>
               <div className="space-y-1 max-h-[130px] overflow-y-auto border border-zinc-200 rounded-lg p-2 bg-white">
-                {MOCK_BROAD.map(a => (
+                {broadList.map(a => (
                   <label key={a.id} className="flex items-center gap-1.5 text-[11px] text-zinc-600 cursor-pointer hover:text-black py-0.5">
                     <input type="checkbox" checked={form.broadAudienceIds.includes(a.id)} onChange={() => toggle("broadAudienceIds", a.id)} className="accent-yellow-400 shrink-0" />
                     {a.label}
@@ -593,7 +637,7 @@ export default function App() {
             <div>
               <p className="text-xs font-bold text-zinc-500 uppercase mb-2">Dados Enriquecidos (Serasa)</p>
               <div className="space-y-1 max-h-[130px] overflow-y-auto border border-zinc-200 rounded-lg p-2 bg-white">
-                {MOCK_SEGMENTED.map(a => (
+                {segmentedList.map(a => (
                   <label key={a.id} className="flex items-center gap-1.5 text-[11px] text-zinc-600 cursor-pointer hover:text-black py-0.5">
                     <input type="checkbox" checked={form.segmentedAudienceIds.includes(a.id)} onChange={() => toggle("segmentedAudienceIds", a.id)} className="accent-yellow-400 shrink-0" />
                     {a.label}
@@ -670,7 +714,7 @@ export default function App() {
           </div>
           {form.creativesMode === "existing" ? (
             <div className="space-y-2">
-              {MOCK_CREATIVES.filter(c => !form.strategy || c.type === form.strategy).map(c => (
+              {creativeList.filter(c => !form.strategy || c.type === form.strategy).map(c => (
                 <label key={c.id} className={`a-list-row ${form.selectedCreatives.includes(c.id) ? "sel" : ""}`}>
                   <span className="ava text-[10px] font-mono">{c.type === "Video" ? "▶" : "▭"}</span>
                   <span className="meta"><span className="n">{c.name}</span><span className="s">{c.type} · {c.size} · {c.dimensions}</span></span>
