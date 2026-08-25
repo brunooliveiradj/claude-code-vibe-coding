@@ -1,21 +1,67 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Send, ArrowRight, ArrowLeft, History, Database, CheckCircle2,
-  ChevronRight, Info, Play, Tag, Layers, MapPin, ShieldAlert,
-  Pencil, Sparkles
+  ChevronRight, Info, Play, Tag, Layers, ShieldAlert,
+  Pencil, Sparkles, Copy, Check
 } from "lucide-react";
 import { CampaignGoal, MediaStrategy, CampaignState, WizardMessage } from "./types";
 import { BudgetSimulator } from "./components/BudgetSimulator";
 import { InteractiveMap } from "./components/InteractiveMap";
 import { CreativeUploader } from "./components/CreativeUploader";
 
+// ─── MOCK DATA ───────────────────────────────────────────────────────────────
+const MOCK_ADVERTISERS = [
+  { id: "adv-1a2b3c4d-e5f6-0001", name: "AdsPlay Media Group" },
+  { id: "adv-2b3c4d5e-f6a7-0002", name: "Pixel Roads Demo Store" },
+  { id: "adv-3c4d5e6f-a7b8-0003", name: "Bradesco Digital" },
+  { id: "adv-4d5e6f7a-b8c9-0004", name: "TechCorp Global" },
+];
+
+const STATE_DATA = [
+  { id: "st-3e4a5b6c-7d8e-sp01", label: "São Paulo (SP)" },
+  { id: "st-4f5b6c7d-8e9f-rj01", label: "Rio de Janeiro (RJ)" },
+  { id: "st-5a6b7c8d-9e0f-mg01", label: "Belo Horizonte (MG)" },
+  { id: "st-6b7c8d9e-0f1a-df01", label: "Brasília (DF)" },
+  { id: "st-7c8d9e0f-1a2b-pr01", label: "Curitiba (PR)" },
+  { id: "st-8d9e0f1a-2b3c-rs01", label: "Porto Alegre (RS)" },
+];
+
+const MOCK_CREATIVES = [
+  { id: "cr-1a2b3c4d-e5f6-0001", name: "Banner Black Friday - 300x250.png", type: "Display", size: "120kb", dimensions: "300x250" },
+  { id: "cr-2b3c4d5e-f6a7-0002", name: "Banner Awareness - 728x90.jpg", type: "Display", size: "180kb", dimensions: "728x90" },
+  { id: "cr-3c4d5e6f-a7b8-0003", name: "Vídeo Institucional - 1920x1080.mp4", type: "Video", size: "24mb", dimensions: "1920x1080" },
+  { id: "cr-4d5e6f7a-b8c9-0004", name: "Mobile App Feature - 320x50.gif", type: "Display", size: "45kb", dimensions: "320x50" },
+];
+
+const MOCK_BROAD = [
+  { id: "aud-broad-a1b2c3d4-0001", label: "Tecnologia e Inovação (Affinity - Google)" },
+  { id: "aud-broad-b2c3d4e5-0002", label: "Entusiastas de Automóveis (Affinity - Google)" },
+  { id: "aud-broad-c3d4e5f6-0003", label: "Compradores de Imóveis (In-Market - Google)" },
+  { id: "aud-broad-d4e5f6a7-0004", label: "Viajantes Frequentes (Affinity - Google)" },
+  { id: "aud-broad-e5f6a7b8-0005", label: "Profissionais de Finanças (In-Market - Google)" },
+  { id: "aud-broad-f6a7b8c9-0006", label: "Moda e Lifestyle (Affinity - Google)" },
+];
+
+const MOCK_SEGMENTED = [
+  { id: "aud-seg-a1b2c3d4-0001", label: "Classe A/B - Serasa (3rd Party)" },
+  { id: "aud-seg-b2c3d4e5-0002", label: "Investidores Alta Renda - Serasa (3rd Party)" },
+  { id: "aud-seg-c3d4e5f6-0003", label: "C-Level - LinkedIn Segment (3rd Party)" },
+  { id: "aud-seg-d4e5f6a7-0004", label: "E-commerce Recentes - Mastercard (3rd Party)" },
+  { id: "aud-seg-e5f6a7b8-0005", label: "Pais e Mães - Target Data (3rd Party)" },
+];
+
+const AGE_RANGES = ["18", "25", "35", "45", "55", "65+"];
+
+// ─── INITIAL STATE ────────────────────────────────────────────────────────────
 const INITIAL_FORM: CampaignState = {
-  objective: "",
-  advertiserName: "AdsPlay Media Group",
+  advertiserId: MOCK_ADVERTISERS[0].id,
+  advertiserName: MOCK_ADVERTISERS[0].name,
   campaignName: "",
+  objective: "",
   startDate: "",
   endDate: "",
   budget: "",
+  paymentModel: "PREPAID",
   groupName: "",
   groupDurationSame: true,
   groupStartDate: "",
@@ -25,17 +71,20 @@ const INITIAL_FORM: CampaignState = {
   cpcBid: 3.5,
   cpmBidAutomatic: true,
   cpmBid: 12,
+  lineName: "",
   strategy: "",
   geoMode: "region",
-  targetRegions: [],
+  targetStateIds: [],
+  targetCityIds: [],
   radiusAddress: "Avenida Paulista, São Paulo - SP",
   radiusKm: 10,
   genders: ["Masculino", "Feminino", "Desconhecido"],
+  ageRanges: ["18", "25", "35", "45", "55", "65+"],
   devices: ["Dispositivos móveis", "Computadores"],
   environments: ["Web", "Apps"],
   keywords: [],
-  broadAudiences: [],
-  segmentedAudiences: [],
+  broadAudienceIds: [],
+  segmentedAudienceIds: [],
   customAudienceRequested: false,
   customAudienceText: "",
   siteBlocklist: [],
@@ -45,36 +94,13 @@ const INITIAL_FORM: CampaignState = {
   frequencyLimitPeriod: "dias",
   lookalike: false,
   creativesMode: "existing",
-  selectedCreatives: ["cr1"],
+  selectedCreatives: [],
   pixelMode: "select",
-  selectedPixelId: "px1",
+  selectedPixelIds: [],
   newPixelName: "",
   newPixelType: "conversion",
+  isDraft: false,
 };
-
-const MOCK_ADVERTISERS = ["AdsPlay Media Group", "Pixel Roads Demo Store", "Bradesco Digital", "TechCorp Global"];
-const MOCK_CREATIVES = [
-  { id: "cr1", name: "Banner Black Friday - 300x250.png", type: "Display", size: "120kb" },
-  { id: "cr2", name: "Banner Awareness - 728x90.jpg", type: "Display", size: "180kb" },
-  { id: "cr3", name: "Vídeo Institucional - 1920x1080.mp4", type: "Video", size: "24mb" },
-  { id: "cr4", name: "Mobile App Feature - 320x50.gif", type: "Display", size: "45kb" },
-];
-const MOCK_BROAD = [
-  "Tecnologia e Inovação (Affinity - Google)",
-  "Entusiastas de Automóveis (Affinity - Google)",
-  "Compradores de Imóveis (In-Market - Google)",
-  "Viajantes Frequentes (Affinity - Google)",
-  "Profissionais de Finanças (In-Market - Google)",
-  "Moda e Lifestyle (Affinity - Google)",
-];
-const MOCK_SEGMENTED = [
-  "Classe A/B - Serasa (3rd Party)",
-  "Investidores Alta Renda - Serasa (3rd Party)",
-  "C-Level - LinkedIn Segment (3rd Party)",
-  "E-commerce Recentes - Mastercard (3rd Party)",
-  "Pais e Mães - Target Data (3rd Party)",
-];
-const REGIONS = ["São Paulo (SP)", "Rio de Janeiro (RJ)", "Belo Horizonte (MG)", "Brasília (DF)", "Curitiba (PR)", "Porto Alegre (RS)"];
 
 const STEP_NAMES = ["", "Objetivo", "Configurações", "Grupo & Lances", "Estratégia & Público", "Criativos", "Pixel", "Revisão"];
 const STEP_INTROS = [
@@ -85,36 +111,128 @@ const STEP_INTROS = [
   "Defina a estratégia de mídia, segmentação geográfica e de público.",
   "Selecione ou adicione os criativos da campanha.",
   "Vincule um pixel para rastreamento e remarketing.",
-  "Revise tudo antes de autorizar o lançamento.",
+  "Revise o payload gerado e autorize o lançamento.",
 ];
 
+// ─── PAYLOAD BUILDER ──────────────────────────────────────────────────────────
+const GENDER_MAP: Record<string, string> = { "Masculino": "MALE", "Feminino": "FEMALE", "Desconhecido": "UNKNOWN" };
+const DEVICE_MAP: Record<string, string> = { "Dispositivos móveis": "MOBILE", "Computadores": "DESKTOP" };
+const ENV_MAP: Record<string, string> = { "Web": "WEB", "Apps": "APP" };
+const FREQ_MAP: Record<string, string> = { "horas": "HOURS", "dias": "DAYS", "semanas": "WEEKS" };
+
+function toISOBR(dateStr: string): string {
+  const p = dateStr.split("/");
+  if (p.length !== 3) return dateStr;
+  const [d, m, y] = p;
+  return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}T00:00:00-03:00`;
+}
+
+function toCents(val: number | ""): number {
+  if (val === "" || isNaN(Number(val))) return 0;
+  return Math.round(Number(val) * 100);
+}
+
+function buildPayload(form: CampaignState): Record<string, unknown> {
+  const groupStart = form.groupDurationSame ? form.startDate : (form.groupStartDate || form.startDate);
+  const groupEnd   = form.groupDurationSame ? form.endDate   : (form.groupEndDate   || form.endDate);
+  const lineName   = form.lineName || `${form.strategy} - ${form.campaignName}`;
+
+  const audiences = [
+    ...form.broadAudienceIds.map(id => ({ audience_id: id, group_index: 0 })),
+    ...form.segmentedAudienceIds.map(id => ({ audience_id: id, group_index: 1 })),
+  ];
+
+  const frequencyCap = form.frequencyLimitEnabled
+    ? { type: "LIMITED", max_impressions: Number(form.frequencyLimitImpressions), time_unit: FREQ_MAP[form.frequencyLimitPeriod] ?? "DAYS", time_unit_count: 1 }
+    : { type: "UNLIMITED" };
+
+  const geo = form.geoMode === "region"
+    ? { mode: "REGION", state_ids: form.targetStateIds, city_ids: form.targetCityIds }
+    : { mode: "RADIUS", address: form.radiusAddress, radius_km: form.radiusKm };
+
+  return {
+    advertiser_id: form.advertiserId,
+    name: form.campaignName,
+    objective: form.objective,
+    start_date: toISOBR(form.startDate),
+    end_date: toISOBR(form.endDate),
+    budget: toCents(form.budget),
+    payment_model: form.paymentModel,
+    is_draft: form.isDraft,
+    package: {
+      name: form.groupName,
+      start_date: toISOBR(groupStart),
+      end_date: toISOBR(groupEnd),
+      budget: toCents(form.groupBudget),
+      bid: {
+        automatic: form.cpcBidAutomatic && form.cpmBidAutomatic,
+        cpc: form.cpcBidAutomatic ? null : toCents(form.cpcBid),
+        cpm: form.cpmBidAutomatic ? null : toCents(form.cpmBid),
+      },
+    },
+    line: {
+      name: lineName,
+      strategy: form.strategy,
+      geo,
+      demographics: {
+        genders: form.genders.filter(g => g !== "Desconhecido").map(g => GENDER_MAP[g]),
+        age_ranges: form.ageRanges,
+        age_unknown: form.genders.includes("Desconhecido"),
+      },
+      browser: form.devices.map(d => DEVICE_MAP[d]).filter(Boolean),
+      environment: form.environments.map(e => ENV_MAP[e]).filter(Boolean),
+      keywords: form.keywords,
+      audiences,
+      custom_audiences: form.customAudienceRequested ? [{ description: form.customAudienceText }] : [],
+      wishlist: form.siteWhitelist,
+      blacklist: form.siteBlocklist,
+      creatives: form.selectedCreatives,
+      frequency_cap: frequencyCap,
+      targetingExpansion: form.lookalike,
+    },
+    pixels: form.selectedPixelIds,
+  };
+}
+
 export default function App() {
-  const [isOpen, setIsOpen] = useState(false);
-  const [step, setStep] = useState(1);
-  const [form, setForm] = useState<CampaignState>(INITIAL_FORM);
-  const [msgs, setMsgs] = useState<WizardMessage[]>([]);
+  const [isOpen, setIsOpen]       = useState(false);
+  const [step, setStep]           = useState(1);
+  const [form, setForm]           = useState<CampaignState>(INITIAL_FORM);
+  const [msgs, setMsgs]           = useState<WizardMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [copied, setCopied]       = useState(false);
   const [campaigns, setCampaigns] = useState<any[]>([
     { id: "c1", name: "Pixel_Roads - Busca_Paga_2025", advertiser: "AdsPlay", objective: "Vendas", budget: 50000, startDate: "21/06/2023", endDate: "Contínuo", status: "Ativo", invested: 34192.38, clicks: 20132, conversions: 2301, strategy: "Display" },
     { id: "c2", name: "teste", advertiser: "AdsPlay", objective: "Awareness", budget: 1500, startDate: "19/05/2026", endDate: "19/06/2026", status: "Pendente", invested: 0, clicks: 0, conversions: 0, strategy: "Video" },
   ]);
-  const [pixels, setPixels] = useState<any[]>([
-    { id: "px1", name: "Pixel Conversão Global - AdsPlay", type: "conversion", installations: 1420 },
-    { id: "px2", name: "Retargeting Home - Pixel Roads", type: "retargeting", installations: 5800 },
+  const [pixels, setPixels]           = useState<any[]>([
+    { id: "px-a1b2c3d4-e5f6-0001", name: "Pixel Conversão Global - AdsPlay", type: "conversion", installations: 1420 },
+    { id: "px-b2c3d4e5-f6a7-0002", name: "Retargeting Home - Pixel Roads", type: "retargeting", installations: 5800 },
   ]);
   const [showCampaigns, setShowCampaigns] = useState(false);
-  const [showPixels, setShowPixels] = useState(false);
-  const [adminAlert, setAdminAlert] = useState<string | null>(null);
-  const [initPrompt, setInitPrompt] = useState("");
-  const [kwInput, setKwInput] = useState("");
-  const [blInput, setBlInput] = useState("");
-  const [wlInput, setWlInput] = useState("");
+  const [showPixels, setShowPixels]       = useState(false);
+  const [adminAlert, setAdminAlert]       = useState<string | null>(null);
+  const [initPrompt, setInitPrompt]       = useState("");
+  const [kwInput, setKwInput]             = useState("");
+  const [blInput, setBlInput]             = useState("");
+  const [wlInput, setWlInput]             = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs, aiLoading]);
+
+  const stateLabel = (id: string) => STATE_DATA.find(s => s.id === id)?.label ?? id;
+  const pixelName  = (id: string) => pixels.find(p => p.id === id)?.name ?? "—";
+
+  const calcDays = (start: string, end: string): number => {
+    try {
+      const p = (s: string) => { const x = s.split("/"); return x.length === 3 ? new Date(+x[2], +x[1] - 1, +x[0]) : new Date(s); };
+      const d = Math.ceil(Math.abs(p(end).getTime() - p(start).getTime()) / 86400000);
+      return isNaN(d) ? 0 : d;
+    } catch { return 0; }
+  };
 
   const getStepSummary = (s: number): string => {
     switch (s) {
@@ -124,20 +242,15 @@ export default function App() {
         return `${form.campaignName} · R$ ${Number(form.budget).toLocaleString("pt-BR")} · ${form.startDate} → ${form.endDate}${days > 0 ? ` (${days} dias)` : ""}`;
       }
       case 3: return `Grupo "${form.groupName}" · R$ ${Number(form.groupBudget).toLocaleString("pt-BR")} · ${form.cpcBidAutomatic ? "Lances automáticos" : `CPC R$${form.cpcBid}`}`;
-      case 4: return `${form.strategy} · ${form.targetRegions.length > 0 ? form.targetRegions.join(", ") : "Nacional"} · ${form.genders.join(", ")}`;
-      case 5: return `${form.selectedCreatives.length} criativo(s) selecionado(s)`;
-      case 6: return `Pixel: ${pixels.find(p => p.id === form.selectedPixelId)?.name ?? form.newPixelName ?? "—"}`;
-      case 7: return "Campanha aprovada e enviada para veiculação.";
+      case 4: {
+        const regionsPart = form.targetStateIds.length > 0 ? form.targetStateIds.map(stateLabel).join(", ") : "Nacional";
+        return `${form.strategy} · ${regionsPart} · ${form.genders.join(", ")}`;
+      }
+      case 5: return `${form.selectedCreatives.length} criativo(s)`;
+      case 6: return form.selectedPixelIds.length > 0 ? form.selectedPixelIds.map(pixelName).join(", ") : form.newPixelName || "—";
+      case 7: return "Payload gerado · pronto para veiculação.";
       default: return "Concluído";
     }
-  };
-
-  const calcDays = (start: string, end: string): number => {
-    try {
-      const p = (s: string) => { const x = s.split("/"); return x.length === 3 ? new Date(+x[2], +x[1]-1, +x[0]) : new Date(s); };
-      const d = Math.ceil(Math.abs(p(end).getTime() - p(start).getTime()) / 86400000);
-      return isNaN(d) ? 0 : d;
-    } catch { return 0; }
   };
 
   const canConfirm = (s: number): boolean => {
@@ -159,24 +272,19 @@ export default function App() {
       { id: "greet", type: "ai-text", text: "Olá! Sou o assistente de mídia programática da Pixel Roads. Vou te guiar na criação da sua campanha passo a passo." },
       { id: "s1", type: "step-active", step: 1 },
     ]);
-    if (prompt?.trim()) {
-      setTimeout(() => callAI(prompt), 400);
-    }
+    if (prompt?.trim()) setTimeout(() => callAI(prompt), 400);
   };
 
   const confirmStep = (s: number) => {
     const summary = getStepSummary(s);
     setMsgs(prev => {
       const updated = prev.map(m =>
-        m.type === "step-active" && m.step === s
-          ? { ...m, type: "step-done" as const, summary }
-          : m
+        m.type === "step-active" && m.step === s ? { ...m, type: "step-done" as const, summary } : m
       );
       if (s < 7) {
-        return [
-          ...updated,
+        return [...updated,
           { id: `u${s}`, type: "user-text" as const, text: summary },
-          { id: `s${s+1}`, type: "step-active" as const, step: s + 1 },
+          { id: `s${s + 1}`, type: "step-active" as const, step: s + 1 },
         ];
       }
       return [...updated, { id: `u${s}`, type: "user-text" as const, text: summary }];
@@ -190,8 +298,7 @@ export default function App() {
     setMsgs(prev => {
       const idx = prev.findIndex(m => m.step === s);
       if (idx === -1) return prev;
-      const before = prev.slice(0, idx);
-      return [...before, { id: `s${s}-edit`, type: "step-active" as const, step: s }];
+      return [...prev.slice(0, idx), { id: `s${s}-edit`, type: "step-active" as const, step: s }];
     });
   };
 
@@ -209,10 +316,7 @@ export default function App() {
       strategy: form.strategy || "Display",
     };
     setCampaigns(prev => [camp, ...prev]);
-    setTimeout(() => {
-      setIsOpen(false);
-      setShowCampaigns(true);
-    }, 400);
+    setTimeout(() => { setIsOpen(false); setShowCampaigns(true); }, 400);
   };
 
   const callAI = async (text: string) => {
@@ -238,7 +342,7 @@ export default function App() {
           if (u.budget != null) { next.budget = u.budget; next.groupBudget = u.budget; }
           if (u.groupName) next.groupName = u.groupName;
           if (u.strategy) next.strategy = u.strategy;
-          if (u.targetRegions?.length) next.targetRegions = u.targetRegions;
+          if (u.targetStateIds?.length) next.targetStateIds = u.targetStateIds;
           if (u.keywords?.length) next.keywords = u.keywords.slice(0, 5);
           return next;
         });
@@ -263,7 +367,13 @@ export default function App() {
     set({ [key]: arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val] } as any);
   };
 
-  // ─── STEP FORMS ────────────────────────────────────────────────────
+  const copyPayload = () => {
+    navigator.clipboard.writeText(JSON.stringify(buildPayload(form), null, 2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // ─── STEP FORMS ──────────────────────────────────────────────────────────────
   const renderStep = (s: number) => {
     switch (s) {
       case 1: return (
@@ -288,8 +398,11 @@ export default function App() {
           <div className="a-field-grid">
             <div className="a-field">
               <label>Anunciante</label>
-              <select value={form.advertiserName} onChange={e => set({ advertiserName: e.target.value })}>
-                {MOCK_ADVERTISERS.map(a => <option key={a}>{a}</option>)}
+              <select value={form.advertiserId} onChange={e => {
+                const adv = MOCK_ADVERTISERS.find(a => a.id === e.target.value);
+                if (adv) set({ advertiserId: adv.id, advertiserName: adv.name });
+              }}>
+                {MOCK_ADVERTISERS.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
             </div>
             <div className="a-field">
@@ -307,10 +420,19 @@ export default function App() {
               <input type="text" placeholder="DD/MM/AAAA" value={form.endDate} onChange={e => set({ endDate: e.target.value })} />
             </div>
           </div>
-          <div className="a-field">
-            <label>Orçamento total (R$)</label>
-            <input type="number" placeholder="ex: 5000" value={form.budget}
-              onChange={e => set({ budget: e.target.value === "" ? "" : +e.target.value, groupBudget: e.target.value === "" ? "" : +e.target.value })} />
+          <div className="a-field-grid">
+            <div className="a-field">
+              <label>Orçamento total (R$)</label>
+              <input type="number" placeholder="ex: 5000" value={form.budget}
+                onChange={e => set({ budget: e.target.value === "" ? "" : +e.target.value, groupBudget: e.target.value === "" ? "" : +e.target.value })} />
+            </div>
+            <div className="a-field">
+              <label>Modelo de pagamento</label>
+              <select value={form.paymentModel} onChange={e => set({ paymentModel: e.target.value as "PREPAID" | "POSTPAID" })}>
+                <option value="PREPAID">Pré-pago</option>
+                <option value="POSTPAID">Pós-pago</option>
+              </select>
+            </div>
           </div>
           {(form.budget || form.startDate) && (
             <BudgetSimulator totalBudget={form.budget} startDate={form.startDate} endDate={form.endDate} />
@@ -363,7 +485,6 @@ export default function App() {
 
       case 4: return (
         <div className="space-y-4 mt-3 max-h-[60vh] overflow-y-auto pr-1">
-          {/* Estratégia */}
           <div>
             <p className="text-xs font-bold text-zinc-500 uppercase mb-2">Formato de Anúncio</p>
             <div className="a-toggle-row">
@@ -376,7 +497,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Geo */}
           <div>
             <p className="text-xs font-bold text-zinc-500 uppercase mb-2">Segmentação Geográfica</p>
             <div className="flex gap-2 mb-2">
@@ -385,10 +505,10 @@ export default function App() {
             </div>
             {form.geoMode === "region" ? (
               <div className="a-chip-list">
-                {REGIONS.map(r => (
-                  <button key={r} type="button" onClick={() => toggle("targetRegions", r)}
-                    className={`a-chip ${form.targetRegions.includes(r) ? "sel" : ""}`}>
-                    {form.targetRegions.includes(r) ? "✓ " : ""}{r}
+                {STATE_DATA.map(st => (
+                  <button key={st.id} type="button" onClick={() => toggle("targetStateIds", st.id)}
+                    className={`a-chip ${form.targetStateIds.includes(st.id) ? "sel" : ""}`}>
+                    {form.targetStateIds.includes(st.id) ? "✓ " : ""}{st.label}
                   </button>
                 ))}
               </div>
@@ -398,7 +518,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Demo */}
           <div className="a-field-grid">
             <div>
               <p className="text-xs font-bold text-zinc-500 uppercase mb-2">Gênero</p>
@@ -409,6 +528,17 @@ export default function App() {
               </div>
             </div>
             <div>
+              <p className="text-xs font-bold text-zinc-500 uppercase mb-2">Faixa etária</p>
+              <div className="a-chip-list">
+                {AGE_RANGES.map(a => (
+                  <button key={a} type="button" onClick={() => toggle("ageRanges", a)} className={`a-chip ${form.ageRanges.includes(a) ? "sel" : ""}`}>{a}+</button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="a-field-grid">
+            <div>
               <p className="text-xs font-bold text-zinc-500 uppercase mb-2">Dispositivos</p>
               <div className="a-chip-list">
                 {["Dispositivos móveis", "Computadores"].map(d => (
@@ -416,26 +546,24 @@ export default function App() {
                 ))}
               </div>
             </div>
-          </div>
-
-          {/* Ambiente */}
-          <div>
-            <p className="text-xs font-bold text-zinc-500 uppercase mb-2">Ambiente</p>
-            <div className="a-chip-list">
-              {["Web", "Apps"].map(e => (
-                <button key={e} type="button" onClick={() => toggle("environments", e)} className={`a-chip ${form.environments.includes(e) ? "sel" : ""}`}>{e}</button>
-              ))}
+            <div>
+              <p className="text-xs font-bold text-zinc-500 uppercase mb-2">Ambiente</p>
+              <div className="a-chip-list">
+                {["Web", "Apps"].map(e => (
+                  <button key={e} type="button" onClick={() => toggle("environments", e)} className={`a-chip ${form.environments.includes(e) ? "sel" : ""}`}>{e}</button>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Keywords */}
           <div>
             <p className="text-xs font-bold text-zinc-500 uppercase mb-2">Palavras-chave <span className="font-normal text-zinc-400">(máx 5, opcional)</span></p>
             <div className="flex gap-2">
               <input type="text" placeholder="Termo de interesse..." value={kwInput} onChange={e => setKwInput(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter" && kwInput.trim() && form.keywords.length < 5) { set({ keywords: [...form.keywords, kwInput.trim()] }); setKwInput(""); } }}
                 className="flex-1 text-xs p-2 border border-zinc-200 rounded-lg bg-white outline-none focus:border-black" />
-              <button type="button" disabled={!kwInput.trim() || form.keywords.length >= 5} onClick={() => { if (kwInput.trim() && form.keywords.length < 5) { set({ keywords: [...form.keywords, kwInput.trim()] }); setKwInput(""); } }}
+              <button type="button" disabled={!kwInput.trim() || form.keywords.length >= 5}
+                onClick={() => { if (kwInput.trim() && form.keywords.length < 5) { set({ keywords: [...form.keywords, kwInput.trim()] }); setKwInput(""); } }}
                 className="text-xs bg-black text-white px-3 py-1.5 rounded-lg font-bold disabled:opacity-40">+ Adicionar</button>
             </div>
             {form.keywords.length > 0 && (
@@ -450,15 +578,14 @@ export default function App() {
             )}
           </div>
 
-          {/* Audiências */}
           <div className="a-field-grid">
             <div>
               <p className="text-xs font-bold text-zinc-500 uppercase mb-2">Audiências Amplas (Google)</p>
               <div className="space-y-1 max-h-[130px] overflow-y-auto border border-zinc-200 rounded-lg p-2 bg-white">
                 {MOCK_BROAD.map(a => (
-                  <label key={a} className="flex items-center gap-1.5 text-[11px] text-zinc-600 cursor-pointer hover:text-black py-0.5">
-                    <input type="checkbox" checked={form.broadAudiences.includes(a)} onChange={() => toggle("broadAudiences", a)} className="accent-yellow-400 shrink-0" />
-                    {a}
+                  <label key={a.id} className="flex items-center gap-1.5 text-[11px] text-zinc-600 cursor-pointer hover:text-black py-0.5">
+                    <input type="checkbox" checked={form.broadAudienceIds.includes(a.id)} onChange={() => toggle("broadAudienceIds", a.id)} className="accent-yellow-400 shrink-0" />
+                    {a.label}
                   </label>
                 ))}
               </div>
@@ -467,25 +594,23 @@ export default function App() {
               <p className="text-xs font-bold text-zinc-500 uppercase mb-2">Dados Enriquecidos (Serasa)</p>
               <div className="space-y-1 max-h-[130px] overflow-y-auto border border-zinc-200 rounded-lg p-2 bg-white">
                 {MOCK_SEGMENTED.map(a => (
-                  <label key={a} className="flex items-center gap-1.5 text-[11px] text-zinc-600 cursor-pointer hover:text-black py-0.5">
-                    <input type="checkbox" checked={form.segmentedAudiences.includes(a)} onChange={() => toggle("segmentedAudiences", a)} className="accent-yellow-400 shrink-0" />
-                    {a}
+                  <label key={a.id} className="flex items-center gap-1.5 text-[11px] text-zinc-600 cursor-pointer hover:text-black py-0.5">
+                    <input type="checkbox" checked={form.segmentedAudienceIds.includes(a.id)} onChange={() => toggle("segmentedAudienceIds", a.id)} className="accent-yellow-400 shrink-0" />
+                    {a.label}
                   </label>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* Blocklist / Whitelist */}
           <div className="a-field-grid">
             <div>
               <p className="text-xs font-bold text-red-400 uppercase mb-1">Blocklist (opcional)</p>
               <div className="flex gap-1.5">
                 <input type="text" placeholder="https://site.com/" value={blInput} onChange={e => setBlInput(e.target.value)}
                   className="flex-1 text-xs p-1.5 bg-white border border-zinc-200 rounded-lg font-mono outline-none focus:border-black" />
-                <button type="button" onClick={() => {
-                  if (blInput.startsWith("https://")) { set({ siteBlocklist: [...form.siteBlocklist, blInput] }); setBlInput(""); }
-                }} className="bg-red-600 text-white text-xs px-2.5 py-1 rounded-lg font-bold">Bloquear</button>
+                <button type="button" onClick={() => { if (blInput.startsWith("https://")) { set({ siteBlocklist: [...form.siteBlocklist, blInput] }); setBlInput(""); } }}
+                  className="bg-red-600 text-white text-xs px-2.5 py-1 rounded-lg font-bold">Bloquear</button>
               </div>
               {form.siteBlocklist.map(s => <span key={s} className="text-[9px] bg-red-50 text-red-500 border border-red-200 rounded px-1.5 py-0.5 font-mono block mt-1 truncate">{s}</span>)}
             </div>
@@ -494,15 +619,13 @@ export default function App() {
               <div className="flex gap-1.5">
                 <input type="text" placeholder="https://site.com/" value={wlInput} onChange={e => setWlInput(e.target.value)}
                   className="flex-1 text-xs p-1.5 bg-white border border-zinc-200 rounded-lg font-mono outline-none focus:border-black" />
-                <button type="button" onClick={() => {
-                  if (wlInput.startsWith("https://")) { set({ siteWhitelist: [...form.siteWhitelist, wlInput] }); setWlInput(""); }
-                }} className="bg-zinc-800 text-yellow-400 text-xs px-2.5 py-1 rounded-lg font-bold">Exclusivo</button>
+                <button type="button" onClick={() => { if (wlInput.startsWith("https://")) { set({ siteWhitelist: [...form.siteWhitelist, wlInput] }); setWlInput(""); } }}
+                  className="bg-zinc-800 text-yellow-400 text-xs px-2.5 py-1 rounded-lg font-bold">Exclusivo</button>
               </div>
               {form.siteWhitelist.map(s => <span key={s} className="text-[9px] bg-zinc-100 text-zinc-600 border border-zinc-200 rounded px-1.5 py-0.5 font-mono block mt-1 truncate">{s}</span>)}
             </div>
           </div>
 
-          {/* Frequência */}
           <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3">
             <label className="flex items-center gap-2 text-xs font-bold cursor-pointer text-zinc-700">
               <input type="checkbox" checked={form.frequencyLimitEnabled} onChange={e => set({ frequencyLimitEnabled: e.target.checked })} className="accent-yellow-400" />
@@ -524,7 +647,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Lookalike */}
           <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3 flex items-center justify-between">
             <div>
               <p className="text-xs font-bold text-zinc-800">Expansão Look-a-like</p>
@@ -548,10 +670,10 @@ export default function App() {
           </div>
           {form.creativesMode === "existing" ? (
             <div className="space-y-2">
-              {MOCK_CREATIVES.filter(c => !form.strategy || c.type === form.strategy || form.strategy === "").map(c => (
+              {MOCK_CREATIVES.filter(c => !form.strategy || c.type === form.strategy).map(c => (
                 <label key={c.id} className={`a-list-row ${form.selectedCreatives.includes(c.id) ? "sel" : ""}`}>
                   <span className="ava text-[10px] font-mono">{c.type === "Video" ? "▶" : "▭"}</span>
-                  <span className="meta"><span className="n">{c.name}</span><span className="s">{c.type} · {c.size}</span></span>
+                  <span className="meta"><span className="n">{c.name}</span><span className="s">{c.type} · {c.size} · {c.dimensions}</span></span>
                   <span className="check">
                     <input type="checkbox" checked={form.selectedCreatives.includes(c.id)} onChange={() => toggle("selectedCreatives", c.id)} className="accent-yellow-400" />
                   </span>
@@ -559,8 +681,8 @@ export default function App() {
               ))}
             </div>
           ) : (
-            <CreativeUploader strategy={form.strategy} onCreativeAdded={item => {
-              const id = `uploaded-${Date.now()}`;
+            <CreativeUploader strategy={form.strategy} onCreativeAdded={() => {
+              const id = `cr-upload-${Date.now()}`;
               set({ selectedCreatives: [...form.selectedCreatives, id] });
             }} />
           )}
@@ -576,14 +698,14 @@ export default function App() {
           {form.pixelMode === "select" ? (
             <div className="space-y-2">
               {pixels.map(px => (
-                <label key={px.id} className={`a-list-row ${form.selectedPixelId === px.id ? "sel" : ""}`}>
+                <label key={px.id} className={`a-list-row ${form.selectedPixelIds.includes(px.id) ? "sel" : ""}`}>
                   <span className="ava text-[9px] font-bold">{px.type === "conversion" ? "CV" : "RT"}</span>
                   <span className="meta">
                     <span className="n">{px.name}</span>
                     <span className="s">{px.type === "conversion" ? "Conversão" : "Remarketing"} · {px.installations} acionamentos</span>
                   </span>
                   <span className="check">
-                    <input type="radio" checked={form.selectedPixelId === px.id} onChange={() => set({ selectedPixelId: px.id })} className="accent-yellow-400" />
+                    <input type="checkbox" checked={form.selectedPixelIds.includes(px.id)} onChange={() => toggle("selectedPixelIds", px.id)} className="accent-yellow-400" />
                   </span>
                 </label>
               ))}
@@ -605,7 +727,7 @@ export default function App() {
               <button type="button" disabled={!form.newPixelName} onClick={() => {
                 const px = { id: `px-${Date.now()}`, name: form.newPixelName, type: form.newPixelType, installations: 0 };
                 setPixels(prev => [...prev, px]);
-                set({ pixelMode: "select", selectedPixelId: px.id, newPixelName: "" });
+                set({ pixelMode: "select", selectedPixelIds: [...form.selectedPixelIds, px.id], newPixelName: "" });
               }} className="w-full bg-black text-white text-xs font-bold py-2 rounded-lg disabled:opacity-40 cursor-pointer hover:bg-zinc-800">
                 Criar Pixel
               </button>
@@ -614,37 +736,36 @@ export default function App() {
         </div>
       );
 
-      case 7: return (
-        <div className="space-y-2 mt-3">
-          <div className="bg-white border border-zinc-200 rounded-xl p-4 space-y-2 text-xs">
-            {[
-              ["Nome", form.campaignName],
-              ["Anunciante", form.advertiserName],
-              ["Objetivo", form.objective],
-              ["Estratégia", form.strategy],
-              ["Orçamento", `R$ ${Number(form.budget).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`],
-              ["Período", `${form.startDate} → ${form.endDate} (${calcDays(form.startDate, form.endDate)} dias)`],
-              ["Grupo", form.groupName],
-              ["Regiões", form.targetRegions.length > 0 ? form.targetRegions.join(", ") : "Nacional"],
-              ["Público", form.genders.join(", ")],
-              ["Dispositivos", form.devices.join(", ")],
-              ["Pixel", pixels.find(p => p.id === form.selectedPixelId)?.name || "—"],
-            ].map(([k, v]) => (
-              <div key={k} className="a-summary-row">
-                <span className="k">{k}</span>
-                <span className={`v ${!v ? "empty" : ""}`}>{v || "Não definido"}</span>
-              </div>
-            ))}
+      case 7: {
+        const payload = buildPayload(form);
+        return (
+          <div className="space-y-3 mt-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-zinc-500 font-mono">Payload · Pixel Roads API</span>
+              <button type="button" onClick={copyPayload}
+                className={`flex items-center gap-1.5 text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer ${copied ? "bg-emerald-600 text-white" : "bg-zinc-800 text-yellow-400 hover:bg-black"}`}>
+                {copied ? <><Check className="h-3 w-3" /> Copiado!</> : <><Copy className="h-3 w-3" /> Copiar JSON</>}
+              </button>
+            </div>
+            <pre className="bg-zinc-950 text-emerald-400 text-[10px] font-mono p-4 rounded-xl overflow-auto max-h-[52vh] leading-relaxed border border-zinc-800 whitespace-pre-wrap break-all">
+              {JSON.stringify(payload, null, 2)}
+            </pre>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-xs cursor-pointer text-zinc-600">
+                <input type="checkbox" checked={form.isDraft} onChange={e => set({ isDraft: e.target.checked })} className="accent-yellow-400" />
+                Salvar como rascunho (is_draft: true)
+              </label>
+            </div>
+            <p className="text-[10px] text-zinc-400 text-center">Ao confirmar, a campanha entrará na fila de veiculação programática da Pixel Roads.</p>
           </div>
-          <p className="text-[10px] text-zinc-400 text-center">Ao confirmar, a campanha entrará na fila de veiculação programática da Pixel Roads.</p>
-        </div>
-      );
+        );
+      }
 
       default: return null;
     }
   };
 
-  // ─── MESSAGE RENDERER ─────────────────────────────────────────────
+  // ─── MESSAGE RENDERER ─────────────────────────────────────────────────────
   const renderMessage = (msg: WizardMessage) => {
     if (msg.type === "user-text") {
       return (
@@ -715,7 +836,15 @@ export default function App() {
     return null;
   };
 
-  // ─── SIDEBAR SUMMARY ──────────────────────────────────────────────
+  // ─── SIDEBAR ──────────────────────────────────────────────────────────────
+  const regionsSummary = form.targetStateIds.length > 0
+    ? form.targetStateIds.map(stateLabel).join(", ")
+    : form.startDate ? "Nacional" : "—";
+
+  const pixelSummary = form.selectedPixelIds.length > 0
+    ? form.selectedPixelIds.map(id => pixelName(id).split(" - ")[0]).join(", ")
+    : "—";
+
   const sidebar = (
     <aside className="a-sidebar">
       <div className="flex items-center gap-2 pb-3 border-b border-zinc-100">
@@ -729,8 +858,8 @@ export default function App() {
           ["Formato", form.strategy || "—"],
           ["Orçamento", form.budget ? `R$ ${Number(form.budget).toLocaleString("pt-BR")}` : "—"],
           ["Período", form.startDate && form.endDate ? `${form.startDate} → ${form.endDate}` : "—"],
-          ["Regiões", form.targetRegions.length > 0 ? form.targetRegions.join(", ") : form.startDate ? "Nacional" : "—"],
-          ["Pixel", pixels.find(p => p.id === form.selectedPixelId)?.name?.split(" - ")[0] || "—"],
+          ["Regiões", regionsSummary],
+          ["Pixel", pixelSummary],
         ].map(([k, v]) => (
           <div key={k} className="a-side-card">
             <h4>{k}</h4>
@@ -748,7 +877,7 @@ export default function App() {
     </aside>
   );
 
-  // ─── LANDING PAGE ─────────────────────────────────────────────────
+  // ─── LANDING PAGE ─────────────────────────────────────────────────────────
   if (!isOpen) {
     return (
       <div className="min-h-screen bg-white text-zinc-900 font-sans flex flex-col">
@@ -780,9 +909,7 @@ export default function App() {
               </div>
             </div>
           </div>
-          <div className="pill hidden lg:flex">
-            <span className="dot" />IA Ativa
-          </div>
+          <div className="pill hidden lg:flex"><span className="dot" />IA Ativa</div>
         </header>
 
         <main className="flex-1 flex flex-col items-center justify-center px-4 py-16 text-center">
@@ -848,7 +975,7 @@ export default function App() {
     );
   }
 
-  // ─── WIZARD VIEW ──────────────────────────────────────────────────
+  // ─── WIZARD VIEW ──────────────────────────────────────────────────────────
   return (
     <div className="h-screen flex flex-col bg-white font-sans overflow-hidden">
       <header className="a-topbar shrink-0">
@@ -877,7 +1004,6 @@ export default function App() {
 
       <div className="a-shell flex-1 min-h-0">
         <div className="a-chat">
-          {/* Progress bar */}
           <div className="a-progress shrink-0">
             {Array.from({ length: 7 }, (_, i) => i + 1).map(n => (
               <div key={n} className={`step ${n < step ? "done" : n === step ? "current" : ""}`} title={STEP_NAMES[n]} />
@@ -895,7 +1021,6 @@ export default function App() {
             }} className="text-[10px] text-zinc-400 hover:text-black font-bold uppercase cursor-pointer">✕ Fechar</button>
           </div>
 
-          {/* Messages */}
           <div className="a-msgs flex-1 min-h-0 overflow-y-auto">
             {msgs.map(renderMessage)}
             {aiLoading && (
@@ -907,7 +1032,6 @@ export default function App() {
             <div ref={chatEndRef} />
           </div>
 
-          {/* Composer */}
           <div className="a-composer-zone shrink-0">
             <div className={`a-composer ${chatInput ? "has-grad" : ""}`}>
               <textarea placeholder="Pergunte ao assistente ou ajuste qualquer parâmetro..."
@@ -943,7 +1067,7 @@ export default function App() {
     </div>
   );
 
-  // ─── MODALS ──────────────────────────────────────────────────────
+  // ─── MODALS ───────────────────────────────────────────────────────────────
   function renderModals() {
     return (
       <>

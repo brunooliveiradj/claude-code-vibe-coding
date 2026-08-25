@@ -11,13 +11,17 @@ export enum MediaStrategy {
 }
 
 export interface CampaignState {
-  objective: CampaignGoal | "";
+  // Campaign
+  advertiserId: string;
   advertiserName: string;
   campaignName: string;
+  objective: CampaignGoal | "";
   startDate: string;
   endDate: string;
   budget: number | "";
+  paymentModel: "PREPAID" | "POSTPAID";
 
+  // Package (group)
   groupName: string;
   groupDurationSame: boolean;
   groupStartDate: string;
@@ -28,19 +32,23 @@ export interface CampaignState {
   cpmBidAutomatic: boolean;
   cpmBid: number;
 
+  // Line (strategy/targeting)
+  lineName: string;
   strategy: MediaStrategy | "";
   geoMode: "region" | "radius";
-  targetRegions: string[];
+  targetStateIds: string[];   // UUIDs of states
+  targetCityIds: string[];
   radiusAddress: string;
   radiusKm: number;
 
-  genders: string[];
+  genders: string[];          // "Masculino" | "Feminino" | "Desconhecido"
+  ageRanges: string[];        // ["18", "25", "35", "45", "55", "65+"]
   devices: string[];
   environments: string[];
 
   keywords: string[];
-  broadAudiences: string[];
-  segmentedAudiences: string[];
+  broadAudienceIds: string[];     // UUIDs of google/affinity audiences
+  segmentedAudienceIds: string[]; // UUIDs of 3rd-party audiences
   customAudienceRequested: boolean;
   customAudienceText: string;
 
@@ -53,13 +61,17 @@ export interface CampaignState {
 
   lookalike: boolean;
 
+  // Creatives
   creativesMode: "existing" | "new";
-  selectedCreatives: string[];
+  selectedCreatives: string[]; // UUIDs
 
+  // Pixel
   pixelMode: "select" | "create";
-  selectedPixelId: string;
+  selectedPixelIds: string[];  // UUIDs (array)
   newPixelName: string;
   newPixelType: "conversion" | "retargeting";
+
+  isDraft: boolean;
 }
 
 export interface WizardMessage {
