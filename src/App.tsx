@@ -1005,14 +1005,9 @@ export default function App() {
             </div>
           </div>
 
-          <div className="mt-12 pt-8 border-t border-zinc-100 w-full max-w-md flex flex-col items-center gap-4">
-            <a href="#/nova-campanha"
-              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl border border-zinc-200 hover:border-black hover:bg-zinc-50 transition-all text-sm font-semibold text-zinc-700">
-              <Sparkles className="h-4 w-4 text-purple-500" />
-              Começar com briefing em texto livre
-            </a>
+          <div className="mt-12 pt-8 border-t border-zinc-100 w-full max-w-md">
             <button onClick={() => openWizard()}
-              className="text-xs text-zinc-400 hover:text-black transition-colors flex items-center gap-1.5">
+              className="text-xs text-zinc-400 hover:text-black transition-colors flex items-center gap-1.5 justify-center mx-auto">
               <Layers className="h-4 w-4" />
               Montar campanha passo a passo manualmente
             </button>

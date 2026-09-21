@@ -13,10 +13,8 @@ function Router() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  if (hash === '#/nova-campanha') {
-    return <CampaignCreator onBack={() => { window.location.hash = ''; }} />;
-  }
-  return <App />;
+  if (hash === '#/legacy') return <App />;
+  return <CampaignCreator />;
 }
 
 createRoot(document.getElementById('root')!).render(
