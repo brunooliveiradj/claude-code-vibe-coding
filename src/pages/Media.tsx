@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Image as ImageIcon, Video, Youtube, Layout, Trash2, Edit2, Instagram, Upload, Loader2, BarChart3, AlertCircle, Layers, X as XIcon, Newspaper, CloudSun, Star, MapPin, TrendingUp, Globe, HardDrive, CheckCircle2, Zap, Trophy, Flag, Calendar } from 'lucide-react';
+import { Plus, Image as ImageIcon, Video, Youtube, Layout, Trash2, Edit2, Instagram, Upload, Loader2, BarChart3, AlertCircle, Layers, X as XIcon, Newspaper, CloudSun, Star, MapPin, TrendingUp, Globe, HardDrive, CheckCircle2, Zap, Trophy, Flag, Calendar, Gift } from 'lucide-react';
 import { auth, db, storage, handleFirestoreError, OperationType } from '../firebase';
 import { ref, uploadBytesResumable, getDownloadURL, getMetadata } from 'firebase/storage';
 import { collection, getDocs, addDoc, deleteDoc, doc, setDoc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
@@ -9,7 +9,7 @@ import { GoogleGenAI } from "@google/genai";
 import { parseBaseImport, parseLooseJson, fetchWcPendingUpdates, fetchBrazilCampaign, matchDocId, matchupKey, WCMatch } from '../lib/worldcup';
 import imageCompression from 'browser-image-compression';
 
-type MediaType = 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'WEATHER' | 'NORTH_STAR' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES' | 'WC_BRAZIL' | 'WC_TODAY' | 'WC_BRACKET' | 'WC_RANKING';
+type MediaType = 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'WEATHER' | 'NORTH_STAR' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES' | 'WC_BRAZIL' | 'WC_TODAY' | 'WC_BRACKET' | 'WC_RANKING' | 'ANNIVERSARY';
 
 interface Media {
   id: string;
@@ -670,6 +670,7 @@ export function Media() {
       case 'WC_TODAY': return <Calendar size={20} />;
       case 'WC_BRACKET': return <Trophy size={20} />;
       case 'WC_RANKING': return <Star size={20} />;
+      case 'ANNIVERSARY': return <Gift size={20} />;
     }
   };
 
@@ -891,6 +892,22 @@ export function Media() {
                   })()}
                 </div>
               )}
+              {item.type === 'ANNIVERSARY' && (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#1a0040] via-[#0d0020] to-[#0a0a0a] p-6 space-y-2 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-purple-800/20 blur-[60px] rounded-full" />
+                  <motion.div
+                    animate={{ rotate: [0, 360] }}
+                    transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+                    className="absolute inset-0 opacity-10"
+                    style={{ background: 'conic-gradient(from 0deg, #f59e0b, #ec4899, #8b5cf6, #06b6d4, #f59e0b)' }}
+                  />
+                  <div className="relative z-10 text-center space-y-1">
+                    <p className="text-3xl">{['🎈', '🎉', '🎊'][Math.floor(item.payload.years % 3)]}</p>
+                    <p className="text-2xl font-black text-white leading-none">{item.payload.years} <span className="text-sm font-bold text-purple-300">anos</span></p>
+                    <p className="text-[9px] font-black text-purple-300 uppercase tracking-widest">{item.payload.companyName || 'Adsplay'}</p>
+                  </div>
+                </div>
+              )}
               {item.type === 'SMART_SALES' && (
                 <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-950 p-6 space-y-2 relative overflow-hidden">
                   <div className="absolute inset-0 bg-emerald-900/20 blur-[60px] rounded-full" />
@@ -1046,7 +1063,7 @@ export function Media() {
 
                 <div className="p-8 pt-6 flex-1 overflow-y-auto custom-scrollbar space-y-8">
                   <div className="grid grid-cols-10 gap-2">
-                    {(['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'MONTHLY_GOAL', 'CAROUSEL', 'NEWS_CLIPPING', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT', 'SMART_SALES', 'WC_BRAZIL', 'WC_TODAY', 'WC_BRACKET', 'WC_RANKING'] as MediaType[]).map((t) => (
+                    {(['IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'MONTHLY_GOAL', 'CAROUSEL', 'NEWS_CLIPPING', 'WEATHER', 'NORTH_STAR', 'WEBSITE_EMBED', 'FINAL_SPRINT', 'SMART_SALES', 'WC_BRAZIL', 'WC_TODAY', 'WC_BRACKET', 'WC_RANKING', 'ANNIVERSARY'] as MediaType[]).map((t) => (
                       <button
                         key={t}
                         type="button"
@@ -1087,6 +1104,9 @@ export function Media() {
                           if (t === 'SMART_SALES') {
                             setPayload({ valueDisplay: 'full', scope: 'latest' });
                           }
+                          if (t === 'ANNIVERSARY') {
+                            setPayload({ companyName: 'Adsplay', years: 9, tagline: '9 anos de inovação', message: 'Obrigado a todos que fazem isso acontecer!' });
+                          }
                           if ((t === 'WC_BRAZIL' || t === 'WC_TODAY' || t === 'WC_BRACKET') && payload.autoRefresh === undefined) {
                             setPayload({ autoRefresh: true });
                           }
@@ -1108,7 +1128,7 @@ export function Media() {
                         }`}
                       >
                         {getIcon(t)}
-                        <span className="text-[7px] font-bold uppercase tracking-widest">{t === 'WC_BRAZIL' ? 'WC BRASIL' : t === 'WC_TODAY' ? 'WC HOJE' : t === 'WC_BRACKET' ? 'WC CHAVE' : t === 'WC_RANKING' ? 'WC RANKING' : t.split('_')[0]}</span>
+                        <span className="text-[7px] font-bold uppercase tracking-widest">{t === 'WC_BRAZIL' ? 'WC BRASIL' : t === 'WC_TODAY' ? 'WC HOJE' : t === 'WC_BRACKET' ? 'WC CHAVE' : t === 'WC_RANKING' ? 'WC RANKING' : t === 'ANNIVERSARY' ? 'ANIVERSÁRIO' : t === 'FINAL_SPRINT' ? 'SPRINT' : t.split('_')[0]}</span>
                       </button>
                     ))}
                   </div>
@@ -1934,6 +1954,73 @@ export function Media() {
                           })()}
                         </div>
                       )}
+                    </div>
+                  )}
+
+                  {type === 'ANNIVERSARY' && (
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-3 p-4 bg-purple-50 rounded-2xl border border-purple-100">
+                        <span className="text-3xl">🎉</span>
+                        <div>
+                          <p className="text-xs font-black text-purple-700 uppercase tracking-widest">Aniversário da Empresa</p>
+                          <p className="text-[10px] text-purple-500 font-medium">Celebre marcos importantes com balões, confete e animações festivas na TV.</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Nome da Empresa</label>
+                          <input
+                            required
+                            type="text"
+                            placeholder="Ex: Adsplay"
+                            value={payload.companyName || ''}
+                            onChange={(e) => setPayload({ ...payload, companyName: e.target.value })}
+                            className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all font-bold"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Anos de Existência</label>
+                          <input
+                            required
+                            type="number"
+                            placeholder="Ex: 9"
+                            min={1}
+                            value={payload.years || ''}
+                            onChange={(e) => setPayload({ ...payload, years: parseInt(e.target.value) || 1 })}
+                            className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all font-bold"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Tagline / Slogan</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: 9 anos de inovação"
+                          value={payload.tagline || ''}
+                          onChange={(e) => setPayload({ ...payload, tagline: e.target.value })}
+                          className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Mensagem de Celebração</label>
+                        <textarea
+                          rows={2}
+                          placeholder="Ex: Obrigado a todos que fazem isso acontecer!"
+                          value={payload.message || ''}
+                          onChange={(e) => setPayload({ ...payload, message: e.target.value })}
+                          className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all resize-none"
+                        />
+                      </div>
+
+                      <div className="bg-gradient-to-br from-purple-900 to-zinc-900 p-5 rounded-3xl text-center space-y-1">
+                        <p className="text-4xl">🎊</p>
+                        <p className="text-2xl font-black text-white">{payload.years || 1} anos</p>
+                        <p className="text-sm font-black text-purple-300">{payload.companyName || 'Empresa'}</p>
+                        {payload.tagline && <p className="text-xs font-medium text-purple-400 italic">"{payload.tagline}"</p>}
+                      </div>
                     </div>
                   )}
 
