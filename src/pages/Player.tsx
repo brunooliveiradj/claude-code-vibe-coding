@@ -67,7 +67,7 @@ import {
 interface Media {
   id: string;
   title: string;
-  type: 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'NORTH_STAR' | 'WEATHER' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES' | 'WC_BRAZIL' | 'WC_TODAY' | 'WC_BRACKET' | 'WC_RANKING';
+  type: 'IMAGE_HERO' | 'VIDEO_FILE' | 'YOUTUBE' | 'DASHBOARD' | 'INSTAGRAM' | 'MONTHLY_GOAL' | 'CAROUSEL' | 'NEWS_CLIPPING' | 'NORTH_STAR' | 'WEATHER' | 'WEBSITE_EMBED' | 'FINAL_SPRINT' | 'SMART_SALES' | 'WC_BRAZIL' | 'WC_TODAY' | 'WC_BRACKET' | 'WC_RANKING' | 'ANNIVERSARY';
   payload: any;
 }
 
@@ -91,6 +91,7 @@ const KNOWN_MEDIA_TYPES = new Set([
   'IMAGE_HERO', 'VIDEO_FILE', 'YOUTUBE', 'DASHBOARD', 'INSTAGRAM', 'CAROUSEL',
   'NEWS_CLIPPING', 'WEBSITE_EMBED', 'WEATHER', 'MONTHLY_GOAL', 'NORTH_STAR',
   'FINAL_SPRINT', 'SMART_SALES', 'WC_BRAZIL', 'WC_TODAY', 'WC_BRACKET', 'WC_RANKING',
+  'ANNIVERSARY',
 ]);
 
 // Types whose render dereferences payload fields directly — without a payload
@@ -2462,6 +2463,139 @@ export function Player() {
                         </>
                       )}
                     </motion.div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {currentMedia.type === 'ANNIVERSARY' && (() => {
+              const companyName = currentMedia.payload?.companyName || 'Adsplay';
+              const years = Number(currentMedia.payload?.years) || 9;
+              const tagline = currentMedia.payload?.tagline || '';
+              const message = currentMedia.payload?.message || '';
+              const balloons = ['🎈', '🎉', '🎊', '🎈', '🎊', '🎉', '🎈'];
+              const confettiColors = ['#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#10b981', '#f97316', '#ef4444'];
+
+              return (
+                <div className="w-full h-full flex flex-col items-center justify-center relative overflow-hidden bg-[#0a0010]">
+                  {/* Rotating conic-gradient aurora background */}
+                  <motion.div
+                    animate={{ rotate: [0, 360] }}
+                    transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+                    className="absolute inset-[-30%] opacity-20 pointer-events-none"
+                    style={{ background: 'conic-gradient(from 0deg, #f59e0b44, #ec489944, #8b5cf644, #06b6d444, #10b98144, #f59e0b44)' }}
+                  />
+                  {/* Radial glow */}
+                  <motion.div
+                    animate={{ scale: [1, 1.4, 1], opacity: [0.25, 0.45, 0.25] }}
+                    transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120vw] h-[120vw] rounded-full blur-[160px] pointer-events-none"
+                    style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.4) 0%, rgba(236,72,153,0.2) 50%, transparent 80%)' }}
+                  />
+
+                  {/* Floating balloons */}
+                  {balloons.map((b, i) => (
+                    <motion.div
+                      key={i}
+                      className="absolute text-[clamp(2rem,4vw,4rem)] pointer-events-none select-none"
+                      style={{ left: `${5 + i * 13}%` }}
+                      initial={{ y: '110vh', opacity: 0 }}
+                      animate={{ y: ['-10vh', '-20vh', '-5vh', '-15vh', '-8vh'], opacity: [0, 1, 1, 1, 0] }}
+                      transition={{ duration: 6 + i * 0.8, repeat: Infinity, delay: i * 0.9, ease: 'easeOut' }}
+                    >
+                      {b}
+                    </motion.div>
+                  ))}
+
+                  {/* Falling confetti squares */}
+                  {[...Array(30)].map((_, i) => (
+                    <motion.div
+                      key={`conf-${i}`}
+                      className="absolute w-3 h-3 rounded-sm pointer-events-none"
+                      style={{
+                        background: confettiColors[i % confettiColors.length],
+                        left: `${Math.random() * 100}%`,
+                        top: '-5%',
+                        rotate: Math.random() * 360,
+                      }}
+                      animate={{ y: ['0vh', '110vh'], rotate: [0, 720], opacity: [1, 0.6, 0] }}
+                      transition={{ duration: 3 + (i % 5), repeat: Infinity, delay: (i * 0.3) % 4, ease: 'linear' }}
+                    />
+                  ))}
+
+                  {/* Firework ring bursts */}
+                  {[...Array(3)].map((_, i) => (
+                    <motion.div
+                      key={`fw-${i}`}
+                      className="absolute rounded-full border-4 border-yellow-400 pointer-events-none"
+                      style={{ top: `${20 + i * 20}%`, left: `${15 + i * 30}%` }}
+                      animate={{ scale: [0, 4, 4], opacity: [1, 0.5, 0] }}
+                      transition={{ duration: 1.6, repeat: Infinity, delay: i * 1.8, ease: 'easeOut' }}
+                    />
+                  ))}
+
+                  {/* Celebration llama */}
+                  <motion.div
+                    className="absolute bottom-10 right-16 text-[clamp(3rem,8vw,7rem)] pointer-events-none select-none"
+                    animate={{ y: [0, -24, 0], rotate: [-10, 10, -10] }}
+                    transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
+                    style={{ filter: 'drop-shadow(0 0 30px rgba(168,85,247,0.8))' }}
+                  >
+                    🦙
+                  </motion.div>
+
+                  {/* Main content */}
+                  <div className="relative z-10 flex flex-col items-center text-center px-20 gap-6">
+                    <motion.div
+                      initial={{ scale: 0.6, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      transition={{ type: 'spring', stiffness: 180, delay: 0.2 }}
+                      className="space-y-2"
+                    >
+                      <motion.p
+                        animate={{ opacity: [0.7, 1, 0.7] }}
+                        transition={{ duration: 2.5, repeat: Infinity }}
+                        className="text-[clamp(1rem,3vw,2.5rem)] font-black text-white/50 uppercase tracking-[0.6em]"
+                      >
+                        {companyName}
+                      </motion.p>
+                      <div
+                        className="text-[clamp(5rem,18vw,18rem)] font-black leading-none tracking-tighter text-transparent bg-clip-text"
+                        style={{ backgroundImage: 'linear-gradient(135deg, #f59e0b 0%, #ec4899 35%, #8b5cf6 65%, #06b6d4 100%)' }}
+                      >
+                        {years}
+                      </div>
+                      <motion.p
+                        animate={{ scale: [1, 1.03, 1] }}
+                        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                        className="text-[clamp(2rem,6vw,6rem)] font-black text-white uppercase tracking-[0.3em]"
+                        style={{ textShadow: '0 0 60px rgba(139,92,246,0.6)' }}
+                      >
+                        ANOS
+                      </motion.p>
+                    </motion.div>
+
+                    {tagline && (
+                      <motion.p
+                        initial={{ opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.6 }}
+                        className="text-[clamp(1.2rem,2.5vw,2.2rem)] font-black text-purple-300 italic tracking-wide"
+                      >
+                        "{tagline}"
+                      </motion.p>
+                    )}
+
+                    {message && (
+                      <motion.p
+                        initial={{ opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.9 }}
+                        className="text-[clamp(0.8rem,1.5vw,1.4rem)] font-medium text-white/60 max-w-3xl"
+                      >
+                        {message}
+                      </motion.p>
+                    )}
                   </div>
                 </div>
               );
