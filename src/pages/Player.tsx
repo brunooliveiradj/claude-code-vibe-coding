@@ -1785,11 +1785,21 @@ export function Player() {
                       </h2>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-6">
-                      {[...(currentMedia.payload.months || [])]
-                        .sort((a, b) => a.month - b.month)
-                        .slice(0, -1) // Exclude current month if it's the last one
-                        .map((m: any, i: number) => {
+                    {(() => {
+                      const prevMonths = [...(currentMedia.payload.months || [])].sort((a, b) => a.month - b.month).slice(0, -1);
+                      const count = prevMonths.length;
+                      const isCompact = count >= 6;
+                      const isUltraCompact = count >= 9;
+                      const cols = isUltraCompact ? 'grid-cols-3' : 'grid-cols-2';
+                      const gap = isCompact ? 'gap-3' : 'gap-6';
+                      const padding = isUltraCompact ? 'p-3' : isCompact ? 'p-5' : 'p-8';
+                      const radius = isUltraCompact ? 'rounded-2xl' : isCompact ? 'rounded-3xl' : 'rounded-[2.5rem]';
+                      const spaceY = isCompact ? 'space-y-2' : 'space-y-4';
+                      const pctSize = isUltraCompact ? 'text-xl' : isCompact ? 'text-2xl' : 'text-4xl';
+                      const barHeight = isCompact ? 'h-1' : 'h-2';
+                      return (
+                    <div className={`grid ${cols} ${gap}`}>
+                      {prevMonths.map((m: any, i: number) => {
                           const currentVal = Number(m.current) || 0;
                           const targetVal = Number(m.target) || 1; // Avoid 0
                           const isHit = currentVal >= targetVal;
@@ -1802,33 +1812,33 @@ export function Player() {
                           const sanitizedWidth = isNaN(widthPercent) ? 0 : widthPercent;
 
                           return (
-                            <div key={i} className={`p-8 rounded-[2.5rem] border transition-all space-y-4 ${
+                            <div key={i} className={`${padding} ${radius} border transition-all ${spaceY} ${
                               isHit ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-zinc-900/50 border-zinc-800'
                             }`}>
                               <div className="flex justify-between items-start">
                                 <p className="text-xs font-black text-zinc-500 uppercase tracking-widest">
                                   {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][m.month - 1]}
                                 </p>
-                                {isHit && (
-                                  <span className="px-3 py-1 bg-emerald-500 text-white text-[10px] font-black rounded-full uppercase tracking-tighter">
-                                    Meta Batida!
+                                {isHit && !isUltraCompact && (
+                                  <span className="px-2 py-0.5 bg-emerald-500 text-white text-[9px] font-black rounded-full uppercase tracking-tighter">
+                                    ✓
                                   </span>
                                 )}
                               </div>
-                              <div className="flex items-baseline gap-2">
-                                <p className={`text-4xl font-black ${isHit ? 'text-emerald-400' : 'text-white'}`}>
+                              <div className="flex items-baseline gap-1">
+                                <p className={`${pctSize} font-black ${isHit ? 'text-emerald-400' : 'text-white'}`}>
                                   {hitPercent}%
                                 </p>
-                                {isHit && surplus > 0 && (
-                                  <p className="text-sm font-bold text-emerald-500/80">
+                                {isHit && surplus > 0 && !isUltraCompact && (
+                                  <p className="text-xs font-bold text-emerald-500/80">
                                     +{surplusPercent}%
                                   </p>
                                 )}
                               </div>
-                              <div className="h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
-                                <div 
+                              <div className={`${barHeight} w-full bg-zinc-800 rounded-full overflow-hidden`}>
+                                <div
                                   className={`h-full transition-all duration-1000 ${isHit ? 'bg-emerald-500' : 'bg-adsplay'}`}
-                                  style={{ width: `${sanitizedWidth}%` }} 
+                                  style={{ width: `${sanitizedWidth}%` }}
                                 />
                               </div>
                             </div>
@@ -1840,6 +1850,8 @@ export function Player() {
                         </div>
                       )}
                     </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Right Column: Current Month Highlight */}
